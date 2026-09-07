@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, domMax, LazyMotion, m, MotionConfig } from "motion/react";
 import {
 	centreFaceParts,
-	DEFAULT_FACE,
 	DEFAULT_FACE_PART_LOCKS,
 	moveFacePart,
 	randomiseFace,
@@ -78,8 +77,12 @@ const getReadableColor = (background: FaceColor) => {
 	return contrastWithDark > contrastWithWhite ? dark : "#ffffff";
 };
 
-export const FaceBuilder = () => {
-	const [face, setFace] = useState<FaceState>(DEFAULT_FACE);
+type FaceBuilderProps = {
+	initialFace: FaceState;
+};
+
+export const FaceBuilder = ({ initialFace }: FaceBuilderProps) => {
+	const [face, setFace] = useState<FaceState>(initialFace);
 	const [locks, setLocks] = useState<FacePartLocks>(DEFAULT_FACE_PART_LOCKS);
 	const [history, setHistory] = useState<HistoryItem[]>([]);
 	const [animation, setAnimation] = useState<"jiggle" | "jump">("jiggle");
