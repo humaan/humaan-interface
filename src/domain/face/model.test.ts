@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	centreFaceParts,
 	createRandomFace,
+	createSeededRandom,
 	DEFAULT_FACE,
 	DEFAULT_FACE_PART_LOCKS,
 	FACE_COLORS,
@@ -115,5 +116,26 @@ describe("face model", () => {
 			expect(placement.x * 2).toBe(Math.round(placement.x * 2));
 			expect(placement.y * 2).toBe(Math.round(placement.y * 2));
 		});
+	});
+
+	it("reproduces a randomised face from the same seed", () => {
+		const first = randomiseFace(
+			DEFAULT_FACE,
+			DEFAULT_FACE_PART_LOCKS,
+			createSeededRandom("hello humaan"),
+		);
+		const second = randomiseFace(
+			DEFAULT_FACE,
+			DEFAULT_FACE_PART_LOCKS,
+			createSeededRandom("hello humaan"),
+		);
+		const different = randomiseFace(
+			DEFAULT_FACE,
+			DEFAULT_FACE_PART_LOCKS,
+			createSeededRandom("another humaan"),
+		);
+
+		expect(first).toEqual(second);
+		expect(first.parts).not.toEqual(different.parts);
 	});
 });

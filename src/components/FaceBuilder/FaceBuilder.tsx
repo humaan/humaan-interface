@@ -1,11 +1,12 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
 	centreFaceParts,
 	DEFAULT_FACE,
 	DEFAULT_FACE_PART_LOCKS,
+	createSeededRandom,
 	moveFacePart,
 	randomiseFace,
 	selectFacePart,
@@ -20,7 +21,7 @@ import {
 import type { FacePartName } from "@/domain/face/parts";
 import { EditorControls } from "./EditorControls";
 import { FaceCanvas } from "./FaceCanvas";
-import { CentreIcon, DownloadIcon, HumaanLogo, ShuffleIcon } from "./Icons";
+import { CentreIcon, DownloadIcon, EmailIcon, HumaanLogo, ShuffleIcon } from "./Icons";
 import styles from "./FaceBuilder.module.scss";
 
 type HistoryItem = {
@@ -79,6 +80,7 @@ export const FaceBuilder = () => {
 	const [face, setFace] = useState<FaceState>(DEFAULT_FACE);
 	const [locks, setLocks] = useState<FacePartLocks>(DEFAULT_FACE_PART_LOCKS);
 	const [history, setHistory] = useState<HistoryItem[]>([]);
+	const [seed, setSeed] = useState("");
 	const [animation, setAnimation] = useState<"jiggle" | "jump">("jiggle");
 	const [animationKey, setAnimationKey] = useState(0);
 	const [announcement, setAnnouncement] = useState("");
@@ -95,11 +97,16 @@ export const FaceBuilder = () => {
 		setAnimationKey(current => current + 1);
 	};
 
-	const handleRandomise = () => {
+	const handleRandomise = (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		const random = seed ? createSeededRandom(seed) : Math.random;
+
 		addToHistory(face);
-		setFace(current => randomiseFace(current, locks));
+		setFace(current => randomiseFace(current, locks, random));
 		replayAnimation("jiggle");
-		setAnnouncement("A new face was generated.");
+		setAnnouncement(
+			seed ? `A face was generated from the seed ${seed}.` : "A new face was generated.",
+		);
 	};
 
 	const handleRestore = (item: HistoryItem) => {
@@ -218,34 +225,6 @@ export const FaceBuilder = () => {
 						/>
 					</div>
 
-					<div className={styles["workspace__actions"]}>
-						<button
-							type="button"
-							className={`${styles["action-button"]} ${styles["action-button--primary"]}`}
-							onClick={handleRandomise}
-						>
-							<ShuffleIcon />
-							<span>Randomise</span>
-						</button>
-						<button
-							type="button"
-							className={styles["action-button"]}
-							onClick={handleCentre}
-						>
-							<CentreIcon />
-							<span>Centre features</span>
-						</button>
-						<button
-							type="button"
-							className={styles["action-button"]}
-							aria-label="Export face as SVG"
-							onClick={handleDownload}
-						>
-							<DownloadIcon />
-							<span>Export SVG</span>
-						</button>
-					</div>
-
 					<div
 						className={styles["history"]}
 						data-empty={history.length === 0 || undefined}
@@ -270,6 +249,68 @@ export const FaceBuilder = () => {
 						</div>
 					</div>
 				</div>
+
+				<form
+					className={styles["action-bar"]}
+					onSubmit={handleRandomise}
+				>
+					<div className={styles["randomise-control"]}>
+						<label className={styles["seed-field"]}>
+							<span>Seed (optional)</span>
+							<input
+								name="seed"
+								type="text"
+								value={seed}
+								placeholder="Enter a seed"
+								autoComplete="off"
+								spellCheck={false}
+								onChange={event => setSeed(event.target.value)}
+							/>
+						</label>
+						<button
+							type="submit"
+							className={`${styles["action-button"]} ${styles["action-button--primary"]}`}
+						>
+							<ShuffleIcon />
+							<span>Randomise</span>
+						</button>
+					</div>
+
+					<div className={styles["utility-actions"]}>
+						<button
+							type="button"
+							className={styles["action-button"]}
+							onClick={handleCentre}
+						>
+							<CentreIcon />
+							<span className={styles["action-button__label--desktop"]}>Centre features</span>
+							<span className={styles["action-button__label--mobile"]}>Centre</span>
+						</button>
+						<div className={styles["export-actions"]}>
+							<button
+								type="button"
+								className={styles["action-button"]}
+								aria-label="Export face as SVG"
+								onClick={handleDownload}
+							>
+								<DownloadIcon />
+								<span className={styles["action-button__label--desktop"]}>Export SVG</span>
+								<span className={styles["action-button__label--mobile"]}>SVG</span>
+							</button>
+							<button
+								type="button"
+								className={styles["action-button"]}
+								aria-label="Export email signature — coming soon"
+								title="Coming soon"
+								disabled
+							>
+								<EmailIcon />
+								<span className={styles["action-button__label--desktop"]}>Email signature</span>
+								<span className={styles["action-button__label--mobile"]}>Email</span>
+							</button>
+						</div>
+					</div>
+				</form>
 				<p
 					className={styles["sr-only"]}
 					aria-live="polite"

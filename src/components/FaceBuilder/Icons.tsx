@@ -61,6 +61,33 @@ export const DownloadIcon = (props: IconProps) => (
 	</svg>
 );
 
+export const EmailIcon = (props: IconProps) => (
+	<svg
+		viewBox="0 0 20 20"
+		aria-hidden="true"
+		{...props}
+	>
+		<rect
+			x="2.5"
+			y="4"
+			width="15"
+			height="12"
+			rx="1.5"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.7"
+		/>
+		<path
+			d="m3.5 5 6.5 5 6.5-5"
+			fill="none"
+			stroke="currentColor"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			strokeWidth="1.7"
+		/>
+	</svg>
+);
+
 export const FlipIcon = (props: IconProps) => (
 	<FlipSvg
 		aria-hidden="true"
