@@ -8,14 +8,20 @@
 }
 
 html {
+	height: 100%;
 	background: #29272d;
+	overflow: hidden;
+	overscroll-behavior: none;
 	-webkit-text-size-adjust: none;
 	-moz-osx-font-smoothing: grayscale;
 }
 
 body {
+	height: 100%;
 	min-width: 20rem;
 	margin: 0;
+	overflow: hidden;
+	overscroll-behavior: none;
 }
 
 button,

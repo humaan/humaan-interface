@@ -13,11 +13,19 @@ export const FACE_PADDING = 3;
 export const CANVAS_SIZE = GRID_DIVISIONS + FACE_PADDING * 2;
 export const POSITION_STEP = 0.5;
 
-export const FACE_COLORS = ["#643A87", "#FFCA38", "#FBD0D1", "#99DAF4", "#F15744", "#DECFE6"] as const;
+export const FACE_COLORS = [
+	"#643A87",
+	"#FFCA38",
+	"#FBD0D1",
+	"#99DAF4",
+	"#F15744",
+	"#DECFE6",
+] as const;
 
 export type FaceColor = (typeof FACE_COLORS)[number];
 export type FacePartKey = "eye1" | "eye2" | "nose" | "mouth";
 export type ColorPlane = "background" | "foreground";
+export type FacePartLocks = Record<FacePartKey, boolean>;
 
 export type PartPlacement = {
 	name: FacePartName;
@@ -42,6 +50,13 @@ export const DEFAULT_FACE: FaceState = {
 		nose: { name: "Nose05", x: 3, y: 4.5, flipX: false, flipY: false },
 		mouth: { name: "Mouth02", x: 2, y: 8, flipX: false, flipY: false },
 	},
+};
+
+export const DEFAULT_FACE_PART_LOCKS: FacePartLocks = {
+	eye1: false,
+	eye2: false,
+	nose: false,
+	mouth: false,
 };
 
 const defaultPartBounds: Record<FacePartKey, Bounds> = {
@@ -70,7 +85,10 @@ const randomItem = <T>(items: readonly T[], random: () => number): T => {
 
 const randomBoolean = (random: () => number) => random() >= 0.5;
 
-const getDefinitionBounds = (definition: FacePartDefinition, fallback: Bounds): Bounds => ({
+const getDefinitionBounds = (
+	definition: FacePartDefinition<FacePartName>,
+	fallback: Bounds,
+): Bounds => ({
 	x: definition.boundX ?? fallback.x,
 	y: definition.boundY ?? fallback.y,
 	width: definition.boundW ?? fallback.width,
@@ -92,7 +110,7 @@ export const normaliseBounds = (bounds: Bounds): Bounds => {
 };
 
 const placeWithinBounds = (
-	definition: FacePartDefinition,
+	definition: FacePartDefinition<FacePartName>,
 	bounds: Bounds,
 	random: (() => number) | null,
 ): Pick<PartPlacement, "x" | "y"> => {
@@ -108,19 +126,19 @@ const placeWithinBounds = (
 };
 
 const createPlacement = (
-	definition: FacePartDefinition,
+	definition: FacePartDefinition<FacePartName>,
 	bounds: Bounds,
 	random: (() => number) | null,
 	allowFlipY: boolean,
 ): PartPlacement => ({
-	name: definition.name as FacePartName,
+	name: definition.name,
 	...placeWithinBounds(definition, bounds, random),
 	flipX: random ? randomBoolean(random) : false,
 	flipY: random && allowFlipY ? randomBoolean(random) : false,
 });
 
 const randomPlacement = (
-	definitions: readonly FacePartDefinition[],
+	definitions: readonly FacePartDefinition<FacePartName>[],
 	bounds: Bounds,
 	random: () => number,
 	allowFlipY = false,
@@ -128,13 +146,12 @@ const randomPlacement = (
 	const normalisedBounds = normaliseBounds(bounds);
 	const availableParts = definitions.filter(
 		definition =>
-			definition.width <= normalisedBounds.width &&
-			definition.height <= normalisedBounds.height,
+			definition.width <= normalisedBounds.width && definition.height <= normalisedBounds.height,
 	);
 
 	if (availableParts.length === 0) {
 		return null;
-			}
+	}
 
 	return createPlacement(randomItem(availableParts, random), normalisedBounds, random, allowFlipY);
 };
@@ -152,6 +169,59 @@ const getPartSlots = (placement: PartPlacement): Bounds[] => {
 	}));
 };
 
+const createRandomParts = (
+	currentParts: FaceState["parts"],
+	locks: FacePartLocks,
+	random: () => number,
+): FaceState["parts"] => {
+	const mouthDefinition: FacePartDefinition<FacePartName> = randomItem(mouthParts, random);
+	const mouth = locks.mouth
+		? currentParts.mouth
+		: createPlacement(
+				mouthDefinition,
+				getDefinitionBounds(mouthDefinition, defaultPartBounds.mouth),
+				random,
+				true,
+			);
+	const activeMouthDefinition = mouth ? getPartDefinition(mouth.name) : null;
+
+	let nose: PartPlacement | null;
+
+	if (locks.nose) {
+		nose = currentParts.nose;
+	} else if (activeMouthDefinition?.skipNose) {
+		nose = null;
+	} else {
+		const noseDefinition: FacePartDefinition<FacePartName> = randomItem(noseParts, random);
+		nose = createPlacement(
+			noseDefinition,
+			getDefinitionBounds(noseDefinition, defaultPartBounds.nose),
+			random,
+			false,
+		);
+	}
+
+	const eyeSlots = nose ? getPartSlots(nose) : mouth ? getPartSlots(mouth) : [];
+	const useDefaultEyeBounds = eyeSlots.length === 0;
+	const eye1Bounds = eyeSlots[0] ?? (useDefaultEyeBounds ? defaultPartBounds.eye1 : null);
+	const eye2Bounds = eyeSlots[1] ?? (useDefaultEyeBounds ? defaultPartBounds.eye2 : null);
+
+	return {
+		eye1: locks.eye1
+			? currentParts.eye1
+			: eye1Bounds
+				? randomPlacement(eyeParts, eye1Bounds, random)
+				: null,
+		eye2: locks.eye2
+			? currentParts.eye2
+			: eye2Bounds
+				? randomPlacement(eyeParts, eye2Bounds, random)
+				: null,
+		nose,
+		mouth,
+	};
+};
+
 export const createRandomFace = (random: () => number = Math.random): FaceState => {
 	const background = randomItem(FACE_COLORS, random);
 	const foreground = randomItem(
@@ -159,39 +229,21 @@ export const createRandomFace = (random: () => number = Math.random): FaceState 
 		random,
 	);
 
-	const mouthDefinition: FacePartDefinition = randomItem(mouthParts, random);
-	const mouth = createPlacement(
-		mouthDefinition,
-		getDefinitionBounds(mouthDefinition, defaultPartBounds.mouth),
-		random,
-		true,
-	);
-
-	let nose: PartPlacement | null = null;
-	let eyeSlots = getPartSlots(mouth);
-
-	if (!mouthDefinition.skipNose) {
-		const noseDefinition: FacePartDefinition = randomItem(noseParts, random);
-		nose = createPlacement(
-			noseDefinition,
-			getDefinitionBounds(noseDefinition, defaultPartBounds.nose),
-			random,
-			false,
-		);
-		eyeSlots = getPartSlots(nose);
-	}
-
 	return {
 		background,
 		foreground,
-		parts: {
-			eye1: eyeSlots[0] ? randomPlacement(eyeParts, eyeSlots[0], random) : null,
-			eye2: eyeSlots[1] ? randomPlacement(eyeParts, eyeSlots[1], random) : null,
-			nose,
-			mouth,
-		},
+		parts: createRandomParts(DEFAULT_FACE.parts, DEFAULT_FACE_PART_LOCKS, random),
 	};
 };
+
+export const randomiseFace = (
+	face: FaceState,
+	locks: FacePartLocks,
+	random: () => number = Math.random,
+): FaceState => ({
+	...face,
+	parts: createRandomParts(face.parts, locks, random),
+});
 
 export const selectFacePart = (
 	face: FaceState,
@@ -229,7 +281,7 @@ export const selectFacePart = (
 						GRID_DIVISIONS - definition.height,
 					),
 				),
-		  }
+			}
 		: placeWithinBounds(definition, bounds, null);
 
 	return {
@@ -246,11 +298,7 @@ export const selectFacePart = (
 	};
 };
 
-export const togglePartFlip = (
-	face: FaceState,
-	key: FacePartKey,
-	axis: "x" | "y",
-): FaceState => {
+export const togglePartFlip = (face: FaceState, key: FacePartKey, axis: "x" | "y"): FaceState => {
 	const placement = face.parts[key];
 
 	if (!placement || (axis === "y" && key !== "mouth")) {
@@ -296,11 +344,44 @@ export const moveFacePart = (
 	};
 };
 
-export const setFaceColor = (
-	face: FaceState,
-	plane: ColorPlane,
-	color: FaceColor,
-): FaceState => {
+export const centreFaceParts = (face: FaceState): FaceState => {
+	const placements = Object.values(face.parts).filter(
+		(placement): placement is PartPlacement => placement !== null,
+	);
+
+	if (placements.length === 0) {
+		return face;
+	}
+
+	const left = Math.min(...placements.map(placement => placement.x));
+	const top = Math.min(...placements.map(placement => placement.y));
+	const right = Math.max(
+		...placements.map(placement => placement.x + getPartDefinition(placement.name).width),
+	);
+	const bottom = Math.max(
+		...placements.map(placement => placement.y + getPartDefinition(placement.name).height),
+	);
+	const offsetX = snap(GRID_DIVISIONS / 2 - (left + right) / 2);
+	const offsetY = snap(GRID_DIVISIONS / 2 - (top + bottom) / 2);
+
+	return {
+		...face,
+		parts: Object.fromEntries(
+			Object.entries(face.parts).map(([key, placement]) => [
+				key,
+				placement
+					? {
+							...placement,
+							x: snap(placement.x + offsetX),
+							y: snap(placement.y + offsetY),
+						}
+					: null,
+			]),
+		) as FaceState["parts"],
+	};
+};
+
+export const setFaceColor = (face: FaceState, plane: ColorPlane, color: FaceColor): FaceState => {
 	if (face[plane] === color) {
 		return face;
 	}

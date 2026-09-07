@@ -1,5 +1,3 @@
-import type { ComponentType, SVGProps } from "react";
-
 export type Bounds = {
 	x: number;
 	y: number;
@@ -7,9 +5,8 @@ export type Bounds = {
 	height: number;
 };
 
-export type FacePartDefinition = {
-	name: string;
-	Icon: ComponentType<SVGProps<SVGSVGElement>>;
+export type FacePartDefinition<Name extends string = string> = {
+	name: Name;
 	width: number;
 	height: number;
 	boundX?: number;
@@ -20,79 +17,34 @@ export type FacePartDefinition = {
 	skipNose?: boolean;
 };
 
-// Eyes
-import Eye01 from "../../assets/face-parts/eyes/01.svg";
-import Eye02 from "../../assets/face-parts/eyes/02.svg";
-import Eye03 from "../../assets/face-parts/eyes/03.svg";
-import Eye04 from "../../assets/face-parts/eyes/04.svg";
-import Eye05 from "../../assets/face-parts/eyes/05.svg";
-import Eye06 from "../../assets/face-parts/eyes/06.svg";
-
-// Nose
-import Nose01 from "../../assets/face-parts/nose/01.svg";
-import Nose02 from "../../assets/face-parts/nose/02.svg";
-import Nose03 from "../../assets/face-parts/nose/03.svg";
-import Nose04 from "../../assets/face-parts/nose/04.svg";
-import Nose05 from "../../assets/face-parts/nose/05.svg";
-import Nose06 from "../../assets/face-parts/nose/06.svg";
-import Nose07 from "../../assets/face-parts/nose/07.svg";
-import Nose08 from "../../assets/face-parts/nose/08.svg";
-import Nose09 from "../../assets/face-parts/nose/09.svg";
-import Nose10 from "../../assets/face-parts/nose/10.svg";
-import Nose11 from "../../assets/face-parts/nose/11.svg";
-import Nose12 from "../../assets/face-parts/nose/12.svg";
-
-// Nose-eye
-import NoseEye01 from "../../assets/face-parts/nose-eye/01.svg";
-import NoseEye02 from "../../assets/face-parts/nose-eye/02.svg";
-import NoseEye03 from "../../assets/face-parts/nose-eye/03.svg";
-import NoseEye04 from "../../assets/face-parts/nose-eye/04.svg";
-import NoseEye05 from "../../assets/face-parts/nose-eye/05.svg";
-import NoseEye06 from "../../assets/face-parts/nose-eye/06.svg";
-
-// Mouth
-import Mouth01 from "../../assets/face-parts/mouth/01.svg";
-import Mouth02 from "../../assets/face-parts/mouth/02.svg";
-import Mouth03 from "../../assets/face-parts/mouth/03.svg";
-import Mouth04 from "../../assets/face-parts/mouth/04.svg";
-import Mouth05 from "../../assets/face-parts/mouth/05.svg";
-import Mouth06 from "../../assets/face-parts/mouth/06.svg";
-import Mouth07 from "../../assets/face-parts/mouth/07.svg";
-
 export const eyeParts = [
 	{
 		name: "Eye01",
-		Icon: Eye01,
 		width: 2,
 		height: 2,
 	},
 	{
 		name: "Eye02",
-		Icon: Eye02,
 		width: 4,
 		height: 2,
 	},
 	{
 		name: "Eye03",
-		Icon: Eye03,
 		width: 3,
 		height: 5,
 	},
 	{
 		name: "Eye04",
-		Icon: Eye04,
 		width: 4,
 		height: 6,
 	},
 	{
 		name: "Eye05",
-		Icon: Eye05,
 		width: 4,
 		height: 4,
 	},
 	{
 		name: "Eye06",
-		Icon: Eye06,
 		width: 4,
 		height: 4,
 	},
@@ -101,7 +53,6 @@ export const eyeParts = [
 export const noseParts = [
 	{
 		name: "Nose01",
-		Icon: Nose01,
 		width: 7,
 		height: 6,
 		boundX: 1,
@@ -125,7 +76,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose02",
-		Icon: Nose02,
 		width: 5,
 		height: 6,
 		boundX: 2,
@@ -149,7 +99,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose03",
-		Icon: Nose03,
 		width: 4,
 		height: 2,
 		boundX: 2,
@@ -173,7 +122,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose04",
-		Icon: Nose04,
 		width: 4,
 		height: 4,
 		boundX: 3,
@@ -197,7 +145,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose05",
-		Icon: Nose05,
 		width: 5,
 		height: 3,
 		boundX: 2,
@@ -221,7 +168,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose06",
-		Icon: Nose06,
 		width: 5,
 		height: 5,
 		boundX: 2,
@@ -245,7 +191,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose07",
-		Icon: Nose07,
 		width: 2,
 		height: 2,
 		boundX: 3,
@@ -269,7 +214,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose08",
-		Icon: Nose08,
 		width: 4,
 		height: 7,
 		boundX: 4,
@@ -293,7 +237,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose09",
-		Icon: Nose09,
 		width: 4,
 		height: 4,
 		boundX: 3,
@@ -317,7 +260,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose10",
-		Icon: Nose10,
 		width: 8,
 		height: 4,
 		boundX: 1,
@@ -341,7 +283,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose11",
-		Icon: Nose11,
 		width: 4,
 		height: 7,
 		boundX: 3,
@@ -365,7 +306,6 @@ export const noseParts = [
 	},
 	{
 		name: "Nose12",
-		Icon: Nose12,
 		width: 3,
 		height: 3,
 		boundX: 3,
@@ -389,7 +329,6 @@ export const noseParts = [
 	},
 	{
 		name: "NoseEye01",
-		Icon: NoseEye01,
 		width: 7,
 		height: 6,
 		boundX: 0,
@@ -407,7 +346,6 @@ export const noseParts = [
 	},
 	{
 		name: "NoseEye02",
-		Icon: NoseEye02,
 		width: 7,
 		height: 6,
 		boundX: 0,
@@ -425,7 +363,6 @@ export const noseParts = [
 	},
 	{
 		name: "NoseEye03",
-		Icon: NoseEye03,
 		width: 7,
 		height: 6,
 		boundX: 0,
@@ -443,7 +380,6 @@ export const noseParts = [
 	},
 	{
 		name: "NoseEye04",
-		Icon: NoseEye04,
 		width: 7,
 		height: 6,
 		boundX: 0,
@@ -461,7 +397,6 @@ export const noseParts = [
 	},
 	{
 		name: "NoseEye05",
-		Icon: NoseEye05,
 		width: 4,
 		height: 7,
 		boundX: 1,
@@ -479,7 +414,6 @@ export const noseParts = [
 	},
 	{
 		name: "NoseEye06",
-		Icon: NoseEye06,
 		width: 7,
 		height: 7,
 		boundX: 0,
@@ -500,7 +434,6 @@ export const noseParts = [
 export const mouthParts = [
 	{
 		name: "Mouth01",
-		Icon: Mouth01,
 		width: 5,
 		height: 5,
 		boundX: 6,
@@ -510,7 +443,6 @@ export const mouthParts = [
 	},
 	{
 		name: "Mouth02",
-		Icon: Mouth02,
 		width: 7,
 		height: 3,
 		boundX: 1,
@@ -520,7 +452,6 @@ export const mouthParts = [
 	},
 	{
 		name: "Mouth03",
-		Icon: Mouth03,
 		width: 10,
 		height: 5,
 		boundX: 0.5,
@@ -545,7 +476,6 @@ export const mouthParts = [
 	},
 	{
 		name: "Mouth04",
-		Icon: Mouth04,
 		width: 2,
 		height: 2,
 		boundX: 1,
@@ -555,7 +485,6 @@ export const mouthParts = [
 	},
 	{
 		name: "Mouth05",
-		Icon: Mouth05,
 		width: 5,
 		height: 5,
 		boundX: 0,
@@ -565,7 +494,6 @@ export const mouthParts = [
 	},
 	{
 		name: "Mouth06",
-		Icon: Mouth06,
 		width: 5,
 		height: 1,
 		boundX: 1,
@@ -575,7 +503,6 @@ export const mouthParts = [
 	},
 	{
 		name: "Mouth07",
-		Icon: Mouth07,
 		width: 4,
 		height: 2,
 		boundX: 1,
@@ -590,11 +517,11 @@ export type NosePartName = (typeof noseParts)[number]["name"];
 export type MouthPartName = (typeof mouthParts)[number]["name"];
 export type FacePartName = EyePartName | NosePartName | MouthPartName;
 
-const partLookup = new Map<FacePartName, FacePartDefinition>(
+const partLookup = new Map<FacePartName, FacePartDefinition<FacePartName>>(
 	[...eyeParts, ...noseParts, ...mouthParts].map(part => [part.name, part]),
 );
 
-export const getPartDefinition = (name: FacePartName): FacePartDefinition => {
+export const getPartDefinition = (name: FacePartName): FacePartDefinition<FacePartName> => {
 	const part = partLookup.get(name);
 
 	if (!part) {

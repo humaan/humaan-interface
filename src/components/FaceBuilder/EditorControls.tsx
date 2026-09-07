@@ -4,6 +4,7 @@ import {
 	type ColorPlane,
 	type FaceColor,
 	type FacePartKey,
+	type FacePartLocks,
 	type FaceState,
 } from "@/domain/face/model";
 import {
@@ -13,14 +14,17 @@ import {
 	type FacePartDefinition,
 	type FacePartName,
 } from "@/domain/face/parts";
-import { CheckIcon, FlipIcon } from "./Icons";
+import { CheckIcon, FlipIcon, LockIcon } from "./Icons";
+import { getPartIcon } from "./partIcons";
 import styles from "./FaceBuilder.module.scss";
 
 type EditorControlsProps = {
 	face: FaceState;
+	locks: FacePartLocks;
 	onSelectColor: (plane: ColorPlane, color: FaceColor) => void;
 	onSelectPart: (key: FacePartKey, name: FacePartName | null) => void;
 	onFlipPart: (key: FacePartKey, axis: "x" | "y") => void;
+	onToggleLock: (key: FacePartKey) => void;
 };
 
 const colorNames: Record<FaceColor, string> = {
@@ -77,7 +81,7 @@ const ColorPicker = ({
 							data-swap={willSwap || undefined}
 							onClick={() => onSelect(plane, color)}
 						>
-							{selected && <CheckIcon />}
+							{selected && <CheckIcon className={styles["selection-check"]} />}
 							{willSwap && !selected && <span aria-hidden="true">↔</span>}
 						</button>
 					);
@@ -91,15 +95,19 @@ const PartPicker = ({
 	partKey,
 	parts,
 	face,
+	locked,
 	onSelect,
 	onFlip,
+	onToggleLock,
 	allowFlipY = false,
 }: {
 	partKey: FacePartKey;
-	parts: readonly FacePartDefinition[];
+	parts: readonly FacePartDefinition<FacePartName>[];
 	face: FaceState;
+	locked: boolean;
 	onSelect: EditorControlsProps["onSelectPart"];
 	onFlip: EditorControlsProps["onFlipPart"];
+	onToggleLock: EditorControlsProps["onToggleLock"];
 	allowFlipY?: boolean;
 }) => {
 	const placement = face.parts[partKey];
@@ -117,10 +125,18 @@ const PartPicker = ({
 				<div className={styles["part-picker__actions"]}>
 					<button
 						type="button"
-						className={styles["flip-button"]}
+						className={styles["part-action-button"]}
+						aria-label={`${locked ? "Unlock" : "Lock"} ${partLabels[partKey]} during randomise`}
+						aria-pressed={locked}
+						data-active={locked || undefined}
+						onClick={() => onToggleLock(partKey)}
+					>
+						<LockIcon locked={locked} />
+					</button>
+					<button
+						type="button"
+						className={styles["part-action-button"]}
 						aria-label={`Flip ${partLabels[partKey]} horizontally`}
-						aria-pressed={placement?.flipX ?? false}
-						disabled={!placement}
 						onClick={() => onFlip(partKey, "x")}
 					>
 						<FlipIcon />
@@ -128,13 +144,11 @@ const PartPicker = ({
 					{allowFlipY && (
 						<button
 							type="button"
-							className={styles["flip-button"]}
+							className={styles["part-action-button"]}
 							aria-label={`Flip ${partLabels[partKey]} vertically`}
-							aria-pressed={placement?.flipY ?? false}
-							disabled={!placement}
 							onClick={() => onFlip(partKey, "y")}
 						>
-							<FlipIcon className={styles["flip-button__vertical-icon"]} />
+							<FlipIcon className={styles["part-action-button__vertical-icon"]} />
 						</button>
 					)}
 				</div>
@@ -148,12 +162,10 @@ const PartPicker = ({
 					aria-pressed={!placement}
 					data-selected={!placement || undefined}
 					onClick={() => onSelect(partKey, null)}
-				>
-					<span className={styles["part-picker__none"]} />
-				</button>
+				/>
 
 				{parts.map((part, index) => {
-					const { Icon } = part;
+					const Icon = getPartIcon(part.name);
 					const selected = placement?.name === part.name;
 
 					return (
@@ -168,9 +180,13 @@ const PartPicker = ({
 						>
 							<span
 								className={styles["part-picker__icon"]}
-								style={{
-									transform: `scale(${placement?.flipX ? -1 : 1}, ${placement?.flipY ? -1 : 1})`,
-								}}
+								style={
+									{
+										"--part-width": part.width,
+										"--part-height": part.height,
+										transform: `scale(${placement?.flipX ? -1 : 1}, ${placement?.flipY ? -1 : 1})`,
+									} as CSSProperties
+								}
 							>
 								<Icon
 									aria-hidden="true"
@@ -178,9 +194,9 @@ const PartPicker = ({
 								/>
 							</span>
 							{selected && (
-								<span className={styles["part-picker__check"]}>
-									<CheckIcon />
-								</span>
+								<CheckIcon
+									className={`${styles["selection-check"]} ${styles["selection-check--part"]}`}
+								/>
 							)}
 						</button>
 					);
@@ -192,28 +208,27 @@ const PartPicker = ({
 
 export const EditorControls = ({
 	face,
+	locks,
 	onSelectColor,
 	onSelectPart,
 	onFlipPart,
+	onToggleLock,
 }: EditorControlsProps) => (
 	<div className={styles["editor-controls"]}>
 		<section
 			className={styles["control-section"]}
 			aria-labelledby="colours-heading"
 		>
-			<div className={styles["control-section__intro"]}>
-				<h2 id="colours-heading">Colours</h2>
-				<p>Selecting a colour already in use swaps the pair.</p>
-			</div>
+			<h2 id="colours-heading">Colours</h2>
 			<div className={styles["color-controls"]}>
 				<ColorPicker
-					label="Face"
+					label="Background"
 					plane="background"
 					face={face}
 					onSelect={onSelectColor}
 				/>
 				<ColorPicker
-					label="Features"
+					label="Face"
 					plane="foreground"
 					face={face}
 					onSelect={onSelectColor}
@@ -225,37 +240,42 @@ export const EditorControls = ({
 			className={styles["control-section"]}
 			aria-labelledby="features-heading"
 		>
-			<div className={styles["control-section__intro"]}>
-				<h2 id="features-heading">Features</h2>
-				<p>Pick a shape, flip it, then drag it into place on the face.</p>
-			</div>
+			<h2 id="features-heading">Features</h2>
 			<PartPicker
 				partKey="eye1"
 				parts={eyeParts}
 				face={face}
+				locked={locks.eye1}
 				onSelect={onSelectPart}
 				onFlip={onFlipPart}
+				onToggleLock={onToggleLock}
 			/>
 			<PartPicker
 				partKey="eye2"
 				parts={eyeParts}
 				face={face}
+				locked={locks.eye2}
 				onSelect={onSelectPart}
 				onFlip={onFlipPart}
+				onToggleLock={onToggleLock}
 			/>
 			<PartPicker
 				partKey="nose"
 				parts={noseParts}
 				face={face}
+				locked={locks.nose}
 				onSelect={onSelectPart}
 				onFlip={onFlipPart}
+				onToggleLock={onToggleLock}
 			/>
 			<PartPicker
 				partKey="mouth"
 				parts={mouthParts}
 				face={face}
+				locked={locks.mouth}
 				onSelect={onSelectPart}
 				onFlip={onFlipPart}
+				onToggleLock={onToggleLock}
 				allowFlipY
 			/>
 		</section>

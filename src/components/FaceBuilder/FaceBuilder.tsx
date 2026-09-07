@@ -3,21 +3,24 @@
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 import {
-	createRandomFace,
+	centreFaceParts,
 	DEFAULT_FACE,
+	DEFAULT_FACE_PART_LOCKS,
 	moveFacePart,
+	randomiseFace,
 	selectFacePart,
 	setFaceColor,
 	togglePartFlip,
 	type ColorPlane,
 	type FaceColor,
 	type FacePartKey,
+	type FacePartLocks,
 	type FaceState,
 } from "@/domain/face/model";
 import type { FacePartName } from "@/domain/face/parts";
 import { EditorControls } from "./EditorControls";
 import { FaceCanvas } from "./FaceCanvas";
-import { DownloadIcon, ShuffleIcon } from "./Icons";
+import { CentreIcon, DownloadIcon, HumaanLogo, ShuffleIcon } from "./Icons";
 import styles from "./FaceBuilder.module.scss";
 
 type HistoryItem = {
@@ -74,6 +77,7 @@ const getReadableColor = (background: FaceColor) => {
 
 export const FaceBuilder = () => {
 	const [face, setFace] = useState<FaceState>(DEFAULT_FACE);
+	const [locks, setLocks] = useState<FacePartLocks>(DEFAULT_FACE_PART_LOCKS);
 	const [history, setHistory] = useState<HistoryItem[]>([]);
 	const [animation, setAnimation] = useState<"jiggle" | "jump">("jiggle");
 	const [animationKey, setAnimationKey] = useState(0);
@@ -93,17 +97,20 @@ export const FaceBuilder = () => {
 
 	const handleRandomise = () => {
 		addToHistory(face);
-		setFace(createRandomFace());
+		setFace(current => randomiseFace(current, locks));
 		replayAnimation("jiggle");
 		setAnnouncement("A new face was generated.");
 	};
 
 	const handleRestore = (item: HistoryItem) => {
 		const currentFace = face;
-		setHistory(current => [
-			{ id: nextHistoryId.current++, face: currentFace },
-			...current.filter(historyItem => historyItem.id !== item.id),
-		].slice(0, 5));
+		const currentFaceHistoryItem = { id: nextHistoryId.current++, face: currentFace };
+		setHistory(current =>
+			[currentFaceHistoryItem, ...current.filter(historyItem => historyItem.id !== item.id)].slice(
+				0,
+				5,
+			),
+		);
 		setFace(item.face);
 		replayAnimation("jump");
 		setAnnouncement("Previous face restored.");
@@ -126,6 +133,12 @@ export const FaceBuilder = () => {
 			URL.revokeObjectURL(url);
 		}, 0);
 		setAnnouncement("SVG downloaded.");
+	};
+
+	const handleCentre = () => {
+		setFace(current => centreFaceParts(current));
+		replayAnimation("jump");
+		setAnnouncement("Face features centred.");
 	};
 
 	useEffect(() => {
@@ -159,20 +172,10 @@ export const FaceBuilder = () => {
 					href="https://humaan.com"
 					aria-label="Humaan home"
 				>
-					<span className={styles["brand__mark"]} aria-hidden="true">
-						<span />
-						<span />
-						<span />
-					</span>
-					<span>HUMAAN</span>
+					<HumaanLogo />
 				</a>
-				<div>
-					<p className={styles["face-builder__eyebrow"]}>Humaan Interface</p>
-					<h1>Build your own Humaan.</h1>
-					<p className={styles["face-builder__intro"]}>
-						Mix, flip and move the pieces until it looks like you.
-					</p>
-				</div>
+				<h1>Humaan Interface</h1>
+				<p className={styles["face-builder__byline"]}>mix and match until you find your humaan</p>
 			</header>
 
 			<aside
@@ -181,6 +184,7 @@ export const FaceBuilder = () => {
 			>
 				<EditorControls
 					face={face}
+					locks={locks}
 					onSelectColor={(plane: ColorPlane, color: FaceColor) =>
 						setFace(current => setFaceColor(current, plane, color))
 					}
@@ -189,6 +193,9 @@ export const FaceBuilder = () => {
 					}
 					onFlipPart={(key: FacePartKey, axis: "x" | "y") =>
 						setFace(current => togglePartFlip(current, key, axis))
+					}
+					onToggleLock={(key: FacePartKey) =>
+						setLocks(current => ({ ...current, [key]: !current[key] }))
 					}
 				/>
 			</aside>
@@ -223,6 +230,14 @@ export const FaceBuilder = () => {
 						<button
 							type="button"
 							className={styles["action-button"]}
+							onClick={handleCentre}
+						>
+							<CentreIcon />
+							<span>Centre features</span>
+						</button>
+						<button
+							type="button"
+							className={styles["action-button"]}
 							aria-label="Export face as SVG"
 							onClick={handleDownload}
 						>
@@ -246,7 +261,10 @@ export const FaceBuilder = () => {
 									aria-label={`Restore previous face ${index + 1}`}
 									onClick={() => handleRestore(item)}
 								>
-									<FaceCanvas face={item.face} />
+									<FaceCanvas
+										face={item.face}
+										className={styles["face-canvas"]}
+									/>
 								</button>
 							))}
 						</div>

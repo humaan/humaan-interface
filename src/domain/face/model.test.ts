@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	centreFaceParts,
 	createRandomFace,
+	DEFAULT_FACE,
+	DEFAULT_FACE_PART_LOCKS,
 	FACE_COLORS,
 	GRID_DIVISIONS,
 	moveFacePart,
+	randomiseFace,
 	selectFacePart,
 	setFaceColor,
 } from "./model";
@@ -54,7 +58,11 @@ describe("face model", () => {
 	});
 
 	it("snaps movement to half-grid positions and clamps it to the canvas", () => {
-		const face = selectFacePart(createRandomFace(() => 0), "eye1", "Eye01");
+		const face = selectFacePart(
+			createRandomFace(() => 0),
+			"eye1",
+			"Eye01",
+		);
 		const moved = moveFacePart(face, "eye1", { x: 20.2, y: -2.2 });
 
 		expect(moved.parts.eye1).toMatchObject({ x: 9, y: 0 });
@@ -66,5 +74,46 @@ describe("face model", () => {
 
 		expect(changed.background).toBe(face.foreground);
 		expect(changed.foreground).toBe(face.background);
+	});
+
+	it("keeps colours and locked features stable while randomising", () => {
+		const locks = { ...DEFAULT_FACE_PART_LOCKS, eye1: true, nose: true };
+		const changed = randomiseFace(DEFAULT_FACE, locks, () => 0.99);
+
+		expect(changed.background).toBe(DEFAULT_FACE.background);
+		expect(changed.foreground).toBe(DEFAULT_FACE.foreground);
+		expect(changed.parts.eye1).toBe(DEFAULT_FACE.parts.eye1);
+		expect(changed.parts.nose).toBe(DEFAULT_FACE.parts.nose);
+		expect(changed.parts.mouth).not.toEqual(DEFAULT_FACE.parts.mouth);
+	});
+
+	it("can randomise eyes when an empty nose filter is locked", () => {
+		const face = { ...DEFAULT_FACE, parts: { ...DEFAULT_FACE.parts, nose: null } };
+		const locks = { ...DEFAULT_FACE_PART_LOCKS, nose: true, mouth: true };
+		const changed = randomiseFace(face, locks, () => 0);
+
+		expect(changed.parts.nose).toBeNull();
+		expect(changed.parts.eye1).not.toBeNull();
+		expect(changed.parts.eye2).not.toBeNull();
+	});
+
+	it("centres the current feature bounds on the half-grid", () => {
+		const centred = centreFaceParts(DEFAULT_FACE);
+		const placements = Object.values(centred.parts).filter(placement => placement !== null);
+		const left = Math.min(...placements.map(placement => placement.x));
+		const top = Math.min(...placements.map(placement => placement.y));
+		const right = Math.max(
+			...placements.map(placement => placement.x + getPartDefinition(placement.name).width),
+		);
+		const bottom = Math.max(
+			...placements.map(placement => placement.y + getPartDefinition(placement.name).height),
+		);
+
+		expect((left + right) / 2).toBe(GRID_DIVISIONS / 2);
+		expect((top + bottom) / 2).toBe(GRID_DIVISIONS / 2);
+		placements.forEach(placement => {
+			expect(placement.x * 2).toBe(Math.round(placement.x * 2));
+			expect(placement.y * 2).toBe(Math.round(placement.y * 2));
+		});
 	});
 });

@@ -12,6 +12,7 @@ import {
 } from "@/domain/face/model";
 import { getPartDefinition } from "@/domain/face/parts";
 import styles from "./FaceBuilder.module.scss";
+import { getPartIcon } from "./partIcons";
 
 type FaceCanvasProps = {
 	face: FaceState;
@@ -166,7 +167,7 @@ export const FaceCanvas = ({
 					if (!placement) return null;
 
 					const definition = getPartDefinition(placement.name);
-					const { Icon } = definition;
+					const Icon = getPartIcon(placement.name);
 					const translateX = placement.x + (placement.flipX ? definition.width : 0);
 					const translateY = placement.y + (placement.flipY ? definition.height : 0);
 					const transform = `translate(${translateX} ${translateY}) scale(${placement.flipX ? -1 : 1} ${placement.flipY ? -1 : 1})`;
