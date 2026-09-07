@@ -42,13 +42,13 @@ export type FaceState = {
 };
 
 export const DEFAULT_FACE: FaceState = {
-	background: "#FBD0D1",
+	background: "#FFCA38",
 	foreground: "#643A87",
 	parts: {
-		eye1: { name: "Eye01", x: 1.5, y: 2, flipX: false, flipY: false },
-		eye2: { name: "Eye05", x: 6.5, y: 1, flipX: false, flipY: false },
-		nose: { name: "Nose05", x: 3, y: 4.5, flipX: false, flipY: false },
-		mouth: { name: "Mouth02", x: 2, y: 8, flipX: false, flipY: false },
+		eye1: { name: "Eye01", x: 2, y: 1, flipX: false, flipY: false },
+		eye2: null,
+		nose: { name: "NoseEye01", x: 4, y: 1, flipX: true, flipY: false },
+		mouth: { name: "Mouth01", x: 0.5, y: 6, flipX: false, flipY: true },
 	},
 };
 

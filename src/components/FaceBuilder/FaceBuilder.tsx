@@ -19,9 +19,11 @@ import {
 	type FaceState,
 } from "@/domain/face/model";
 import type { FacePartName } from "@/domain/face/parts";
+import { LoadFaceDialog } from "@/components/LoadFaceDialog/LoadFaceDialog";
+import { SignatureDialog } from "@/components/SignatureDialog/SignatureDialog";
 import { EditorControls } from "./EditorControls";
 import { FaceCanvas } from "./FaceCanvas";
-import { CentreIcon, DownloadIcon, EmailIcon, HumaanLogo, ShuffleIcon } from "./Icons";
+import { CentreIcon, DownloadIcon, EmailIcon, HumaanLogo, LoadIcon, ShuffleIcon } from "./Icons";
 import styles from "./FaceBuilder.module.scss";
 
 type HistoryItem = {
@@ -83,6 +85,8 @@ export const FaceBuilder = () => {
 	const [animation, setAnimation] = useState<"jiggle" | "jump">("jiggle");
 	const [animationKey, setAnimationKey] = useState(0);
 	const [announcement, setAnnouncement] = useState("");
+	const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+	const [loadDialogOpen, setLoadDialogOpen] = useState(false);
 	const nextHistoryId = useRef(0);
 	const faceSvgRef = useRef<SVGSVGElement>(null);
 
@@ -140,6 +144,13 @@ export const FaceBuilder = () => {
 		setFace(current => centreFaceParts(current));
 		replayAnimation("jump");
 		setAnnouncement("Face features centred.");
+	};
+
+	const handleLoadFace = (loadedFace: FaceState) => {
+		addToHistory(face);
+		setFace(loadedFace);
+		replayAnimation("jump");
+		setAnnouncement("Saved face loaded.");
 	};
 
 	useEffect(() => {
@@ -280,6 +291,15 @@ export const FaceBuilder = () => {
 						<button
 							type="button"
 							className={styles["action-button"]}
+							onClick={() => setLoadDialogOpen(true)}
+						>
+							<LoadIcon />
+							<span className={styles["action-button__label--desktop"]}>Load saved face</span>
+							<span className={styles["action-button__label--mobile"]}>Load</span>
+						</button>
+						<button
+							type="button"
+							className={styles["action-button"]}
 							onClick={handleCentre}
 						>
 							<CentreIcon />
@@ -300,9 +320,8 @@ export const FaceBuilder = () => {
 							<button
 								type="button"
 								className={styles["action-button"]}
-								aria-label="Export email signature — coming soon"
-								title="Coming soon"
-								disabled
+								aria-label="Generate email signature"
+								onClick={() => setSignatureDialogOpen(true)}
 							>
 								<EmailIcon />
 								<span className={styles["action-button__label--desktop"]}>Email signature</span>
@@ -318,6 +337,16 @@ export const FaceBuilder = () => {
 					{announcement}
 				</p>
 			</main>
+			<SignatureDialog
+				face={face}
+				open={signatureDialogOpen}
+				onClose={() => setSignatureDialogOpen(false)}
+			/>
+			<LoadFaceDialog
+				open={loadDialogOpen}
+				onClose={() => setLoadDialogOpen(false)}
+				onLoad={handleLoadFace}
+			/>
 		</div>
 	);
 };

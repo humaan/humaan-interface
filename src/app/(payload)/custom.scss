@@ -1,0 +1,13 @@
+@layer payload-default {
+	.document-fields:not(.document-fields--force-sidebar-wrap) {
+		--sidebar-wrap-width: calc(
+			400px + var(--sidebar-gutter-h-left) + var(--sidebar-gutter-h-right)
+		);
+		--sidebar-wrap-min-width: var(--sidebar-wrap-width);
+		--sidebar-wrap-flex-shrink: 0;
+
+		.document-fields__main {
+			min-width: 0;
+		}
+	}
+}

@@ -128,6 +128,23 @@ export const LockIcon = ({ locked = false, ...props }: IconProps & { locked?: bo
 	</svg>
 );
 
+export const LoadIcon = (props: IconProps) => (
+	<svg
+		viewBox="0 0 20 20"
+		aria-hidden="true"
+		{...props}
+	>
+		<path
+			d="M10 17V7m0 0L6 11m4-4 4 4M3 6V3h14v3M3 14v3h14v-3"
+			fill="none"
+			stroke="currentColor"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			strokeWidth="1.8"
+		/>
+	</svg>
+);
+
 export const ShuffleIcon = (props: IconProps) => (
 	<svg
 		viewBox="0 0 24 24"

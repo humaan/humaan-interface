@@ -5,7 +5,7 @@
       "DOM.Iterable",
       "ES2022"
     ],
-    "allowJs": false,
+    "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -19,11 +19,23 @@
     "plugins": [
       {
         "name": "next"
+      },
+      {
+        "name": "@payloadcms/typescript-plugin"
       }
     ],
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@payload-config": [
+        "./src/app/(payload)/_config/payload.config.ts"
+      ],
+      "@payload-internal/*": [
+        "./node_modules/payload/dist/*"
+      ],
+      "@cms/*": [
+        "./src/app/(payload)/_config/*"
       ]
     },
     "target": "ES2022"

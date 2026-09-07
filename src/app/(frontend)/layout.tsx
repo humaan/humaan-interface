@@ -13,7 +13,7 @@ export const viewport: Viewport = {
 	initialScale: 1,
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default function FrontendLayout({ children }: Readonly<{ children: ReactNode }>) {
 	return (
 		<html lang="en">
 			<body>{children}</body>

@@ -4,3 +4,5 @@ dist
 .next
 .vercel
 *.tsbuildinfo
+.env*
+!.env.local.example
