@@ -1,0 +1,11 @@
+allowBuilds:
+  "@parcel/watcher": false
+  esbuild: false
+  sharp: false
+  unrs-resolver: false
+blockExoticSubdeps: true
+minimumReleaseAge: 60
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - eslint-import-resolver-typescript@3.10.1
+  - semver@6.3.1
