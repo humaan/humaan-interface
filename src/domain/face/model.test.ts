@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
 	centreFaceParts,
 	createRandomFace,
-	createSeededRandom,
 	DEFAULT_FACE,
 	DEFAULT_FACE_PART_LOCKS,
 	FACE_COLORS,
+	facePartsCollide,
+	getFaceOpticalCentre,
 	GRID_DIVISIONS,
 	moveFacePart,
 	randomiseFace,
@@ -13,6 +14,28 @@ import {
 	setFaceColor,
 } from "./model";
 import { getPartDefinition } from "./parts";
+
+const sequenceRandom = (...values: number[]) => {
+	let index = 0;
+
+	return () => values[index++] ?? values.at(-1) ?? 0;
+};
+
+const repeatingRandom = (...values: number[]) => {
+	let index = 0;
+
+	return () => values[index++ % values.length];
+};
+
+const pseudoRandom = (seed: number) => {
+	let state = seed;
+
+	return () => {
+		state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+
+		return state / 4294967296;
+	};
+};
 
 describe("face model", () => {
 	it("creates a complete, contrasting random face within the canvas", () => {
@@ -98,44 +121,168 @@ describe("face model", () => {
 		expect(changed.parts.eye2).not.toBeNull();
 	});
 
-	it("centres the current feature bounds on the half-grid", () => {
-		const centred = centreFaceParts(DEFAULT_FACE);
-		const placements = Object.values(centred.parts).filter(placement => placement !== null);
-		const left = Math.min(...placements.map(placement => placement.x));
-		const top = Math.min(...placements.map(placement => placement.y));
-		const right = Math.max(
-			...placements.map(placement => placement.x + getPartDefinition(placement.name).width),
+	it("uses another available position when the preferred position collides", () => {
+		const face: typeof DEFAULT_FACE = {
+			...DEFAULT_FACE,
+			parts: {
+				eye1: { name: "Eye01", x: 3, y: 3, flipX: false, flipY: false },
+				eye2: null,
+				nose: null,
+				mouth: null,
+			},
+		};
+		const locks = { eye1: true, eye2: true, nose: false, mouth: true };
+		const changed = randomiseFace(face, locks, sequenceRandom(0.34, 0, 0, 0));
+		const nose = changed.parts.nose;
+
+		expect(nose?.name).toBe("Nose07");
+		expect(nose && (nose.x >= 5 || nose.y >= 5)).toBe(true);
+	});
+
+	it("allows bounding boxes to overlap where both parts have empty space", () => {
+		const mouth = { name: "Mouth01", x: 6, y: 6, flipX: false, flipY: false } as const;
+		const nose = { name: "Nose07", x: 6, y: 6, flipX: false, flipY: false } as const;
+
+		expect(facePartsCollide(mouth, nose)).toBe(false);
+	});
+
+	it("mirrors asymmetric mouths across the face while keeping their open side inward", () => {
+		const emptyFace: typeof DEFAULT_FACE = {
+			...DEFAULT_FACE,
+			parts: { eye1: null, eye2: null, nose: null, mouth: null },
+		};
+		const locks = { eye1: true, eye2: true, nose: true, mouth: false };
+		const quarterMouth = randomiseFace(emptyFace, locks, sequenceRandom(0, 0.9, 0, 0, 0));
+		const verticallyFlippedQuarter = randomiseFace(
+			emptyFace,
+			locks,
+			sequenceRandom(0, 0.9, 0.9, 0, 0),
 		);
-		const bottom = Math.max(
-			...placements.map(placement => placement.y + getPartDefinition(placement.name).height),
+		const diagonalMouth = randomiseFace(emptyFace, locks, sequenceRandom(0.6, 0.9, 0, 0, 0));
+		const verticallyFlippedDiagonal = randomiseFace(
+			emptyFace,
+			locks,
+			sequenceRandom(0.6, 0.9, 0.9, 0, 0),
 		);
 
-		expect((left + right) / 2).toBe(GRID_DIVISIONS / 2);
-		expect((top + bottom) / 2).toBe(GRID_DIVISIONS / 2);
-		placements.forEach(placement => {
-			expect(placement.x * 2).toBe(Math.round(placement.x * 2));
-			expect(placement.y * 2).toBe(Math.round(placement.y * 2));
+		expect(quarterMouth.parts.mouth).toMatchObject({ name: "Mouth01", flipX: true });
+		expect(verticallyFlippedQuarter.parts.mouth).toMatchObject({
+			name: "Mouth01",
+			flipX: false,
+			flipY: true,
+		});
+		expect(diagonalMouth.parts.mouth).toMatchObject({ name: "Mouth05", flipX: true, flipY: false });
+		expect(verticallyFlippedDiagonal.parts.mouth).toMatchObject({
+			name: "Mouth05",
+			flipX: false,
+			flipY: true,
 		});
 	});
 
-	it("reproduces a randomised face from the same seed", () => {
-		const first = randomiseFace(
-			DEFAULT_FACE,
-			DEFAULT_FACE_PART_LOCKS,
-			createSeededRandom("hello humaan"),
+	it("reorients vertically flipped asymmetric mouths after optical centring changes their side", () => {
+		const leftHeavyFace: typeof DEFAULT_FACE = {
+			...DEFAULT_FACE,
+			parts: {
+				eye1: { name: "Eye06", x: 0, y: 0, flipX: false, flipY: false },
+				eye2: null,
+				nose: null,
+				mouth: null,
+			},
+		};
+		const locks = { eye1: true, eye2: true, nose: true, mouth: false };
+		const normalQuarter = randomiseFace(leftHeavyFace, locks, repeatingRandom(0, 0.1, 0.1, 0, 0));
+		const verticalQuarter = randomiseFace(
+			leftHeavyFace,
+			locks,
+			repeatingRandom(0, 0.1, 0.9, 0, 0),
 		);
-		const second = randomiseFace(
-			DEFAULT_FACE,
-			DEFAULT_FACE_PART_LOCKS,
-			createSeededRandom("hello humaan"),
-		);
-		const different = randomiseFace(
-			DEFAULT_FACE,
-			DEFAULT_FACE_PART_LOCKS,
-			createSeededRandom("another humaan"),
-		);
+		const normal = randomiseFace(leftHeavyFace, locks, repeatingRandom(0.6, 0.1, 0.1, 0, 0));
+		const vertical = randomiseFace(leftHeavyFace, locks, repeatingRandom(0.6, 0.1, 0.9, 0, 0));
 
-		expect(first).toEqual(second);
-		expect(first.parts).not.toEqual(different.parts);
+		expect(normalQuarter.parts.mouth).toMatchObject({
+			name: "Mouth01",
+			x: 6,
+			flipX: false,
+			flipY: false,
+		});
+		expect(verticalQuarter.parts.mouth).toMatchObject({
+			name: "Mouth01",
+			x: 6,
+			flipX: true,
+			flipY: true,
+		});
+		expect(normal.parts.mouth).toMatchObject({ name: "Mouth05", x: 6, flipX: true, flipY: false });
+		expect(vertical.parts.mouth).toMatchObject({
+			name: "Mouth05",
+			x: 6,
+			flipX: false,
+			flipY: true,
+		});
+	});
+
+	it("always assigns the leftmost generated eye to the left-eye slot", () => {
+		const random = pseudoRandom(42);
+
+		for (let index = 0; index < 250; index += 1) {
+			const { eye1, eye2 } = createRandomFace(random).parts;
+
+			if (!eye1 || !eye2) continue;
+
+			const eye1Centre = eye1.x + getPartDefinition(eye1.name).width / 2;
+			const eye2Centre = eye2.x + getPartDefinition(eye2.name).width / 2;
+			expect(eye1Centre).toBeLessThanOrEqual(eye2Centre);
+		}
+	});
+
+	it("centres visual density without letting a light outlier dominate", () => {
+		const face: typeof DEFAULT_FACE = {
+			...DEFAULT_FACE,
+			parts: {
+				eye1: { name: "Eye06", x: 0, y: 3.5, flipX: false, flipY: false },
+				eye2: { name: "Eye01", x: 9, y: 4.5, flipX: false, flipY: false },
+				nose: null,
+				mouth: null,
+			},
+		};
+		const centred = centreFaceParts(face);
+		const placements = Object.values(centred.parts).filter(placement => placement !== null);
+
+		expect(centred.parts.eye1?.x).toBe(1.5);
+		expect(centred.parts.eye2?.x).toBe(9);
+		expect(centreFaceParts(centred)).toEqual(centred);
+		placements.forEach(placement => {
+			const definition = getPartDefinition(placement.name);
+
+			expect(placement.x * 2).toBe(Math.round(placement.x * 2));
+			expect(placement.y * 2).toBe(Math.round(placement.y * 2));
+			expect(placement.x).toBeGreaterThanOrEqual(0);
+			expect(placement.y).toBeGreaterThanOrEqual(0);
+			expect(placement.x + definition.width).toBeLessThanOrEqual(GRID_DIVISIONS);
+			expect(placement.y + definition.height).toBeLessThanOrEqual(GRID_DIVISIONS);
+		});
+	});
+
+	it("centres optical density vertically after randomisation", () => {
+		const random = pseudoRandom(84);
+		let maximumXError = 0;
+		let maximumYError = 0;
+
+		for (let index = 0; index < 100; index += 1) {
+			const face = randomiseFace(DEFAULT_FACE, DEFAULT_FACE_PART_LOCKS, random);
+			const opticalCentre = getFaceOpticalCentre(face);
+			const placements = Object.values(face.parts).filter(placement => placement !== null);
+
+			maximumXError = Math.max(maximumXError, Math.abs(opticalCentre.x - GRID_DIVISIONS / 2));
+			maximumYError = Math.max(maximumYError, Math.abs(opticalCentre.y - GRID_DIVISIONS / 2));
+
+			placements.forEach((placement, placementIndex) => {
+				placements.slice(placementIndex + 1).forEach(otherPlacement => {
+					expect(facePartsCollide(placement, otherPlacement)).toBe(false);
+				});
+			});
+		}
+
+		expect(maximumXError).toBeLessThanOrEqual(0.5);
+		expect(maximumYError).toBeLessThanOrEqual(0.5);
 	});
 });

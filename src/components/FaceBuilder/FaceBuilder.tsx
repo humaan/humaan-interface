@@ -1,12 +1,12 @@
 "use client";
 
-import type { CSSProperties, FormEvent } from "react";
+import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, domMax, LazyMotion, m, MotionConfig } from "motion/react";
 import {
 	centreFaceParts,
 	DEFAULT_FACE,
 	DEFAULT_FACE_PART_LOCKS,
-	createSeededRandom,
 	moveFacePart,
 	randomiseFace,
 	selectFacePart,
@@ -80,7 +80,6 @@ export const FaceBuilder = () => {
 	const [face, setFace] = useState<FaceState>(DEFAULT_FACE);
 	const [locks, setLocks] = useState<FacePartLocks>(DEFAULT_FACE_PART_LOCKS);
 	const [history, setHistory] = useState<HistoryItem[]>([]);
-	const [seed, setSeed] = useState("");
 	const [animation, setAnimation] = useState<"jiggle" | "jump">("jiggle");
 	const [animationKey, setAnimationKey] = useState(0);
 	const [announcement, setAnnouncement] = useState("");
@@ -97,16 +96,11 @@ export const FaceBuilder = () => {
 		setAnimationKey(current => current + 1);
 	};
 
-	const handleRandomise = (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		const random = seed ? createSeededRandom(seed) : Math.random;
-
+	const handleRandomise = () => {
 		addToHistory(face);
-		setFace(current => randomiseFace(current, locks, random));
+		setFace(current => randomiseFace(current, locks));
 		replayAnimation("jiggle");
-		setAnnouncement(
-			seed ? `A face was generated from the seed ${seed}.` : "A new face was generated.",
-		);
+		setAnnouncement("A new face was generated.");
 	};
 
 	const handleRestore = (item: HistoryItem) => {
@@ -182,7 +176,7 @@ export const FaceBuilder = () => {
 					<HumaanLogo />
 				</a>
 				<h1>Humaan Interface</h1>
-				<p className={styles["face-builder__byline"]}>mix and match until you find your humaan</p>
+				<p className={styles["face-builder__byline"]}>Mix and match until you find your humaan.</p>
 			</header>
 
 			<aside
@@ -230,51 +224,57 @@ export const FaceBuilder = () => {
 						data-empty={history.length === 0 || undefined}
 					>
 						<p>Previous faces</p>
-						<div className={styles["history__items"]}>
-							{history.map((item, index) => (
-								<button
-									key={item.id}
-									type="button"
-									className={styles["history__item"]}
-									style={{ "--history-index": index } as CSSProperties}
-									aria-label={`Restore previous face ${index + 1}`}
-									onClick={() => handleRestore(item)}
-								>
-									<FaceCanvas
-										face={item.face}
-										className={styles["face-canvas"]}
-									/>
-								</button>
-							))}
-						</div>
+						<LazyMotion
+							features={domMax}
+							strict
+						>
+							<MotionConfig reducedMotion="user">
+								<div className={styles["history__items"]}>
+									<AnimatePresence
+										initial={false}
+										mode="popLayout"
+									>
+										{history.map((item, index) => (
+											<m.button
+												layout="position"
+												key={item.id}
+												type="button"
+												className={styles["history__item"]}
+												aria-label={`Restore previous face ${index + 1}`}
+												initial={{ opacity: 0, scale: 0.82, x: -12 }}
+												animate={{ opacity: 1 - index * 0.1, scale: 1, x: 0 }}
+												exit={{ opacity: 0, scale: 0.78 }}
+												transition={{
+													layout: { type: "spring", bounce: 0.16, duration: 0.48 },
+													opacity: { duration: 0.16 },
+													scale: { duration: 0.16 },
+												}}
+												whileHover={{ y: -3, scale: 1.03 }}
+												whileFocus={{ y: -3, scale: 1.03 }}
+												onClick={() => handleRestore(item)}
+											>
+												<FaceCanvas
+													face={item.face}
+													className={styles["face-canvas"]}
+												/>
+											</m.button>
+										))}
+									</AnimatePresence>
+								</div>
+							</MotionConfig>
+						</LazyMotion>
 					</div>
 				</div>
 
-				<form
-					className={styles["action-bar"]}
-					onSubmit={handleRandomise}
-				>
-					<div className={styles["randomise-control"]}>
-						<label className={styles["seed-field"]}>
-							<span>Seed (optional)</span>
-							<input
-								name="seed"
-								type="text"
-								value={seed}
-								placeholder="Enter a seed"
-								autoComplete="off"
-								spellCheck={false}
-								onChange={event => setSeed(event.target.value)}
-							/>
-						</label>
-						<button
-							type="submit"
-							className={`${styles["action-button"]} ${styles["action-button--primary"]}`}
-						>
-							<ShuffleIcon />
-							<span>Randomise</span>
-						</button>
-					</div>
+				<div className={styles["action-bar"]}>
+					<button
+						type="button"
+						className={`${styles["action-button"]} ${styles["action-button--primary"]}`}
+						onClick={handleRandomise}
+					>
+						<ShuffleIcon />
+						<span>Randomise</span>
+					</button>
 
 					<div className={styles["utility-actions"]}>
 						<button
@@ -310,7 +310,7 @@ export const FaceBuilder = () => {
 							</button>
 						</div>
 					</div>
-				</form>
+				</div>
 				<p
 					className={styles["sr-only"]}
 					aria-live="polite"

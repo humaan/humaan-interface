@@ -1,5 +1,6 @@
 import {
 	eyeParts,
+	facePartOpticalMass,
 	getPartDefinition,
 	mouthParts,
 	noseParts,
@@ -85,24 +86,6 @@ const randomItem = <T>(items: readonly T[], random: () => number): T => {
 
 const randomBoolean = (random: () => number) => random() >= 0.5;
 
-export const createSeededRandom = (seed: string): (() => number) => {
-	let state = 2166136261;
-
-	for (let index = 0; index < seed.length; index += 1) {
-		state ^= seed.charCodeAt(index);
-		state = Math.imul(state, 16777619);
-	}
-
-	return () => {
-		state += 0x6d2b79f5;
-		let value = state;
-		value = Math.imul(value ^ (value >>> 15), value | 1);
-		value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-
-		return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-	};
-};
-
 const getDefinitionBounds = (
 	definition: FacePartDefinition<FacePartName>,
 	fallback: Bounds,
@@ -143,63 +126,231 @@ const placeWithinBounds = (
 	};
 };
 
+const getCollisionZones = (placement: PartPlacement): Bounds[] => {
+	const definition = getPartDefinition(placement.name);
+	const padding = definition.collisionZones ? POSITION_STEP / 2 : 0;
+	const zones = definition.collisionZones ?? [
+		{ x: 0, y: 0, width: definition.width, height: definition.height },
+	];
+
+	return zones.map(zone => ({
+		x: placement.x + (placement.flipX ? definition.width - zone.x - zone.width : zone.x) - padding,
+		y:
+			placement.y + (placement.flipY ? definition.height - zone.y - zone.height : zone.y) - padding,
+		width: zone.width + padding * 2,
+		height: zone.height + padding * 2,
+	}));
+};
+
+const getIntersectionArea = (first: Bounds, second: Bounds) => {
+	const width =
+		Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
+	const height =
+		Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
+
+	return Math.max(0, width) * Math.max(0, height);
+};
+
+const getCollisionScore = (placement: PartPlacement, obstacles: readonly PartPlacement[]) =>
+	getCollisionZones(placement).reduce(
+		(total, zone) =>
+			total +
+			obstacles.reduce(
+				(obstacleTotal, obstacle) =>
+					obstacleTotal +
+					getCollisionZones(obstacle).reduce(
+						(zoneTotal, obstacleZone) => zoneTotal + getIntersectionArea(zone, obstacleZone),
+						0,
+					),
+				0,
+			),
+		0,
+	);
+
+export const facePartsCollide = (first: PartPlacement, second: PartPlacement) =>
+	getCollisionScore(first, [second]) > 0;
+
+const getPlacementOptions = (
+	definition: FacePartDefinition<FacePartName>,
+	bounds: Bounds,
+): Pick<PartPlacement, "x" | "y">[] => {
+	const availableX = Math.max(0, bounds.width - definition.width);
+	const availableY = Math.max(0, bounds.height - definition.height);
+	const xSteps = Math.floor(availableX / POSITION_STEP) + 1;
+	const ySteps = Math.floor(availableY / POSITION_STEP) + 1;
+
+	return Array.from({ length: ySteps }, (_, yIndex) =>
+		Array.from({ length: xSteps }, (_, xIndex) => ({
+			x: snap(bounds.x + xIndex * POSITION_STEP),
+			y: snap(bounds.y + yIndex * POSITION_STEP),
+		})),
+	).flat();
+};
+
+const placeAvoidingCollisions = (
+	definition: FacePartDefinition<FacePartName>,
+	bounds: Bounds,
+	random: (() => number) | null,
+	flipX: boolean,
+	flipY: boolean,
+	obstacles: readonly PartPlacement[],
+): Pick<PartPlacement, "x" | "y"> => {
+	const preferredPosition = placeWithinBounds(definition, bounds, random);
+
+	if (obstacles.length === 0) {
+		return preferredPosition;
+	}
+
+	const positions = getPlacementOptions(definition, bounds);
+	const preferredIndex = positions.findIndex(
+		position => position.x === preferredPosition.x && position.y === preferredPosition.y,
+	);
+	const orderedPositions = [
+		...positions.slice(Math.max(0, preferredIndex)),
+		...positions.slice(0, Math.max(0, preferredIndex)),
+	];
+	let bestPosition = preferredPosition;
+	let bestScore = Number.POSITIVE_INFINITY;
+
+	for (const position of orderedPositions) {
+		const score = getCollisionScore(
+			{ name: definition.name, ...position, flipX, flipY },
+			obstacles,
+		);
+
+		if (score === 0) {
+			return position;
+		}
+
+		if (score < bestScore) {
+			bestPosition = position;
+			bestScore = score;
+		}
+	}
+
+	return bestPosition;
+};
+
 const createPlacement = (
 	definition: FacePartDefinition<FacePartName>,
 	bounds: Bounds,
 	random: (() => number) | null,
 	allowFlipY: boolean,
-): PartPlacement => ({
-	name: definition.name,
-	...placeWithinBounds(definition, bounds, random),
-	flipX: random ? randomBoolean(random) : false,
-	flipY: random && allowFlipY ? randomBoolean(random) : false,
-});
+	obstacles: readonly PartPlacement[] = [],
+): PartPlacement => {
+	const horizontalVariant = random ? randomBoolean(random) : false;
+	const flipY = random && allowFlipY ? randomBoolean(random) : false;
+	const flipX =
+		definition.directionAwareFlipX === "inverse-when-flipped-y" && flipY
+			? !horizontalVariant
+			: horizontalVariant;
+	const placementBounds = normaliseBounds(
+		definition.directionAwareFlipX && horizontalVariant
+			? { ...bounds, x: GRID_DIVISIONS - bounds.x - bounds.width }
+			: bounds,
+	);
+
+	return {
+		name: definition.name,
+		...placeAvoidingCollisions(definition, placementBounds, random, flipX, flipY, obstacles),
+		flipX,
+		flipY,
+	};
+};
 
 const randomPlacement = (
 	definitions: readonly FacePartDefinition<FacePartName>[],
-	bounds: Bounds,
+	bounds: Bounds | ((definition: FacePartDefinition<FacePartName>) => Bounds),
 	random: () => number,
 	allowFlipY = false,
+	obstacles: readonly PartPlacement[] = [],
 ): PartPlacement | null => {
-	const normalisedBounds = normaliseBounds(bounds);
-	const availableParts = definitions.filter(
-		definition =>
-			definition.width <= normalisedBounds.width && definition.height <= normalisedBounds.height,
-	);
+	const availableParts: Array<{
+		definition: FacePartDefinition<FacePartName>;
+		bounds: Bounds;
+	}> = [];
+
+	definitions.forEach(definition => {
+		const partBounds = normaliseBounds(typeof bounds === "function" ? bounds(definition) : bounds);
+
+		if (definition.width <= partBounds.width && definition.height <= partBounds.height) {
+			availableParts.push({ definition, bounds: partBounds });
+		}
+	});
 
 	if (availableParts.length === 0) {
 		return null;
 	}
 
-	return createPlacement(randomItem(availableParts, random), normalisedBounds, random, allowFlipY);
+	const startIndex = Math.min(
+		availableParts.length - 1,
+		Math.floor(random() * availableParts.length),
+	);
+	const orderedParts = [
+		...availableParts.slice(startIndex),
+		...availableParts.slice(0, startIndex),
+	];
+	let bestPlacement: PartPlacement | null = null;
+	let bestScore = Number.POSITIVE_INFINITY;
+
+	for (const option of orderedParts) {
+		const placement = createPlacement(
+			option.definition,
+			option.bounds,
+			random,
+			allowFlipY,
+			obstacles,
+		);
+		const score = getCollisionScore(placement, obstacles);
+
+		if (score === 0) {
+			return placement;
+		}
+
+		if (score < bestScore) {
+			bestPlacement = placement;
+			bestScore = score;
+		}
+	}
+
+	return bestPlacement;
 };
 
 const getPartSlots = (placement: PartPlacement): Bounds[] => {
 	const definition = getPartDefinition(placement.name);
 
-	return (definition.slots ?? []).map(slot => ({
-		x: placement.flipX
-			? placement.x + definition.width - slot.x - slot.width
-			: placement.x + slot.x,
-		y: placement.y + slot.y,
-		width: slot.width,
-		height: slot.height,
-	}));
+	return (definition.slots ?? [])
+		.map(slot => ({
+			x: placement.flipX
+				? placement.x + definition.width - slot.x - slot.width
+				: placement.x + slot.x,
+			y: placement.y + slot.y,
+			width: slot.width,
+			height: slot.height,
+		}))
+		.sort((first, second) => first.x - second.x);
 };
+
+const compactPlacements = (...placements: Array<PartPlacement | null>): PartPlacement[] =>
+	placements.filter((placement): placement is PartPlacement => placement !== null);
 
 const createRandomParts = (
 	currentParts: FaceState["parts"],
 	locks: FacePartLocks,
 	random: () => number,
 ): FaceState["parts"] => {
-	const mouthDefinition: FacePartDefinition<FacePartName> = randomItem(mouthParts, random);
 	const mouth = locks.mouth
 		? currentParts.mouth
-		: createPlacement(
-				mouthDefinition,
-				getDefinitionBounds(mouthDefinition, defaultPartBounds.mouth),
+		: randomPlacement(
+				mouthParts,
+				definition => getDefinitionBounds(definition, defaultPartBounds.mouth),
 				random,
 				true,
+				compactPlacements(
+					locks.eye1 ? currentParts.eye1 : null,
+					locks.eye2 ? currentParts.eye2 : null,
+					locks.nose ? currentParts.nose : null,
+				),
 			);
 	const activeMouthDefinition = mouth ? getPartDefinition(mouth.name) : null;
 
@@ -210,12 +361,16 @@ const createRandomParts = (
 	} else if (activeMouthDefinition?.skipNose) {
 		nose = null;
 	} else {
-		const noseDefinition: FacePartDefinition<FacePartName> = randomItem(noseParts, random);
-		nose = createPlacement(
-			noseDefinition,
-			getDefinitionBounds(noseDefinition, defaultPartBounds.nose),
+		nose = randomPlacement(
+			noseParts,
+			definition => getDefinitionBounds(definition, defaultPartBounds.nose),
 			random,
 			false,
+			compactPlacements(
+				mouth,
+				locks.eye1 ? currentParts.eye1 : null,
+				locks.eye2 ? currentParts.eye2 : null,
+			),
 		);
 	}
 
@@ -224,17 +379,26 @@ const createRandomParts = (
 	const eye1Bounds = eyeSlots[0] ?? (useDefaultEyeBounds ? defaultPartBounds.eye1 : null);
 	const eye2Bounds = eyeSlots[1] ?? (useDefaultEyeBounds ? defaultPartBounds.eye2 : null);
 
+	const eye1 = locks.eye1
+		? currentParts.eye1
+		: eye1Bounds
+			? randomPlacement(
+					eyeParts,
+					eye1Bounds,
+					random,
+					false,
+					compactPlacements(mouth, nose, locks.eye2 ? currentParts.eye2 : null),
+				)
+			: null;
+	const eye2 = locks.eye2
+		? currentParts.eye2
+		: eye2Bounds
+			? randomPlacement(eyeParts, eye2Bounds, random, false, compactPlacements(mouth, nose, eye1))
+			: null;
+
 	return {
-		eye1: locks.eye1
-			? currentParts.eye1
-			: eye1Bounds
-				? randomPlacement(eyeParts, eye1Bounds, random)
-				: null,
-		eye2: locks.eye2
-			? currentParts.eye2
-			: eye2Bounds
-				? randomPlacement(eyeParts, eye2Bounds, random)
-				: null,
+		eye1,
+		eye2,
 		nose,
 		mouth,
 	};
@@ -258,10 +422,41 @@ export const randomiseFace = (
 	face: FaceState,
 	locks: FacePartLocks,
 	random: () => number = Math.random,
-): FaceState => ({
-	...face,
-	parts: createRandomParts(face.parts, locks, random),
-});
+): FaceState => {
+	const canvasCentre = GRID_DIVISIONS / 2;
+	let bestFace: FaceState | null = null;
+	let bestCollisionScore = Number.POSITIVE_INFINITY;
+	let bestOpticalDistance = Number.POSITIVE_INFINITY;
+
+	for (let attempt = 0; attempt < 8; attempt += 1) {
+		const candidate = centreFacePartsWithLocks(
+			{
+				...face,
+				parts: createRandomParts(face.parts, locks, random),
+			},
+			locks,
+			true,
+		);
+		const placements = compactPlacements(...Object.values(candidate.parts));
+		const collisionScore = getTotalCollisionScore(placements);
+		const opticalCentre = getOpticalCentre(placements);
+		const opticalDistance =
+			(opticalCentre.x - canvasCentre) ** 2 + (opticalCentre.y - canvasCentre) ** 2;
+
+		if (
+			collisionScore < bestCollisionScore ||
+			(collisionScore === bestCollisionScore && opticalDistance < bestOpticalDistance)
+		) {
+			bestFace = candidate;
+			bestCollisionScore = collisionScore;
+			bestOpticalDistance = opticalDistance;
+		}
+
+		if (collisionScore === 0 && opticalDistance <= 0.125) break;
+	}
+
+	return bestFace ?? face;
+};
 
 export const selectFacePart = (
 	face: FaceState,
@@ -362,42 +557,160 @@ export const moveFacePart = (
 	};
 };
 
-export const centreFaceParts = (face: FaceState): FaceState => {
-	const placements = Object.values(face.parts).filter(
-		(placement): placement is PartPlacement => placement !== null,
+const CENTERING_OFFSETS = Array.from(
+	{ length: (GRID_DIVISIONS * 2) / POSITION_STEP + 1 },
+	(_, index) => index * POSITION_STEP - GRID_DIVISIONS,
+);
+
+const getOpticalCentre = (placements: readonly PartPlacement[]) => {
+	let totalArea = 0;
+	let xMoment = 0;
+	let yMoment = 0;
+
+	placements.forEach(placement => {
+		const definition = getPartDefinition(placement.name);
+		const opticalMass = facePartOpticalMass[placement.name];
+		const localX = placement.flipX ? definition.width - opticalMass.x : opticalMass.x;
+		const localY = placement.flipY ? definition.height - opticalMass.y : opticalMass.y;
+
+		totalArea += opticalMass.area;
+		xMoment += (placement.x + localX) * opticalMass.area;
+		yMoment += (placement.y + localY) * opticalMass.area;
+	});
+
+	return totalArea
+		? { x: xMoment / totalArea, y: yMoment / totalArea }
+		: { x: GRID_DIVISIONS / 2, y: GRID_DIVISIONS / 2 };
+};
+
+export const getFaceOpticalCentre = (face: FaceState) =>
+	getOpticalCentre(compactPlacements(...Object.values(face.parts)));
+
+const getTotalCollisionScore = (placements: readonly PartPlacement[]) =>
+	placements.reduce(
+		(total, placement, index) => total + getCollisionScore(placement, placements.slice(index + 1)),
+		0,
 	);
 
-	if (placements.length === 0) {
+const orientDirectionAwarePlacement = (placement: PartPlacement): PartPlacement => {
+	const definition = getPartDefinition(placement.name);
+
+	if (!definition.directionAwareFlipX) {
+		return placement;
+	}
+
+	const baseCentre = (definition.boundX ?? 0) + definition.width / 2;
+	const placementCentre = placement.x + definition.width / 2;
+	const canvasCentre = GRID_DIVISIONS / 2;
+
+	if (placementCentre === canvasCentre) {
+		return placement;
+	}
+
+	const mirroredPosition = baseCentre < canvasCentre !== placementCentre < canvasCentre;
+	const flipX =
+		definition.directionAwareFlipX === "inverse-when-flipped-y" && placement.flipY
+			? !mirroredPosition
+			: mirroredPosition;
+
+	return flipX === placement.flipX ? placement : { ...placement, flipX };
+};
+
+const offsetFaceParts = (
+	parts: FaceState["parts"],
+	locks: FacePartLocks,
+	offsetX: number,
+	offsetY: number,
+	orientDirectionAwareParts: boolean,
+): FaceState["parts"] => {
+	const nextParts = { ...parts };
+
+	(Object.keys(nextParts) as FacePartKey[]).forEach(key => {
+		const placement = nextParts[key];
+
+		if (!placement || locks[key]) return;
+
+		const definition = getPartDefinition(placement.name);
+		const movedPlacement = {
+			...placement,
+			x: snap(clamp(placement.x + offsetX, 0, GRID_DIVISIONS - definition.width)),
+			y: snap(clamp(placement.y + offsetY, 0, GRID_DIVISIONS - definition.height)),
+		};
+
+		nextParts[key] = orientDirectionAwareParts
+			? orientDirectionAwarePlacement(movedPlacement)
+			: movedPlacement;
+	});
+
+	return nextParts;
+};
+
+const centreFacePartsWithLocks = (
+	face: FaceState,
+	locks: FacePartLocks,
+	orientDirectionAwareParts: boolean,
+): FaceState => {
+	const hasMovablePlacement = (Object.keys(face.parts) as FacePartKey[]).some(
+		key => face.parts[key] && !locks[key],
+	);
+
+	if (!hasMovablePlacement) {
 		return face;
 	}
 
-	const left = Math.min(...placements.map(placement => placement.x));
-	const top = Math.min(...placements.map(placement => placement.y));
-	const right = Math.max(
-		...placements.map(placement => placement.x + getPartDefinition(placement.name).width),
-	);
-	const bottom = Math.max(
-		...placements.map(placement => placement.y + getPartDefinition(placement.name).height),
-	);
-	const offsetX = snap(GRID_DIVISIONS / 2 - (left + right) / 2);
-	const offsetY = snap(GRID_DIVISIONS / 2 - (top + bottom) / 2);
+	const canvasCentre = GRID_DIVISIONS / 2;
+	const stationaryParts = offsetFaceParts(face.parts, locks, 0, 0, orientDirectionAwareParts);
+	const stationaryPlacements = compactPlacements(...Object.values(stationaryParts));
+	const maximumCollisionScore = getTotalCollisionScore(stationaryPlacements);
+	const stationaryOpticalCentre = getOpticalCentre(stationaryPlacements);
+	let bestParts = stationaryParts;
+	let bestCollisionScore = maximumCollisionScore;
+	let bestOpticalDistance =
+		(stationaryOpticalCentre.x - canvasCentre) ** 2 +
+		(stationaryOpticalCentre.y - canvasCentre) ** 2;
+	let bestMovement = 0;
 
-	return {
-		...face,
-		parts: Object.fromEntries(
-			Object.entries(face.parts).map(([key, placement]) => [
-				key,
-				placement
-					? {
-							...placement,
-							x: snap(placement.x + offsetX),
-							y: snap(placement.y + offsetY),
-						}
-					: null,
-			]),
-		) as FaceState["parts"],
-	};
+	CENTERING_OFFSETS.forEach(offsetX => {
+		CENTERING_OFFSETS.forEach(offsetY => {
+			const candidateParts = offsetFaceParts(
+				face.parts,
+				locks,
+				offsetX,
+				offsetY,
+				orientDirectionAwareParts,
+			);
+			const placements = compactPlacements(...Object.values(candidateParts));
+			const collisionScore = getTotalCollisionScore(placements);
+			const opticalCentre = getOpticalCentre(placements);
+			const opticalDistance =
+				(opticalCentre.x - canvasCentre) ** 2 + (opticalCentre.y - canvasCentre) ** 2;
+			const movement = Math.abs(offsetX) + Math.abs(offsetY);
+
+			if (collisionScore > maximumCollisionScore) return;
+
+			const isOpticallyCloser = opticalDistance < bestOpticalDistance;
+			const isEquallyClose = opticalDistance === bestOpticalDistance;
+			const hasLessCollision = collisionScore < bestCollisionScore;
+			const hasEqualCollision = collisionScore === bestCollisionScore;
+
+			if (
+				isOpticallyCloser ||
+				(isEquallyClose && hasLessCollision) ||
+				(isEquallyClose && hasEqualCollision && movement < bestMovement)
+			) {
+				bestParts = candidateParts;
+				bestCollisionScore = collisionScore;
+				bestOpticalDistance = opticalDistance;
+				bestMovement = movement;
+			}
+		});
+	});
+
+	return { ...face, parts: bestParts };
 };
+
+export const centreFaceParts = (face: FaceState): FaceState =>
+	centreFacePartsWithLocks(face, DEFAULT_FACE_PART_LOCKS, false);
 
 export const setFaceColor = (face: FaceState, plane: ColorPlane, color: FaceColor): FaceState => {
 	if (face[plane] === color) {
