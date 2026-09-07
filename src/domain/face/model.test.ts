@@ -6,7 +6,6 @@ import {
 	DEFAULT_FACE_PART_LOCKS,
 	FACE_COLORS,
 	facePartsCollide,
-	getFaceOpticalCentre,
 	GRID_DIVISIONS,
 	moveFacePart,
 	randomiseFace,
@@ -191,11 +190,7 @@ describe("face model", () => {
 		};
 		const locks = { eye1: true, eye2: true, nose: true, mouth: false };
 		const normalQuarter = randomiseFace(leftHeavyFace, locks, repeatingRandom(0, 0.1, 0.1, 0, 0));
-		const verticalQuarter = randomiseFace(
-			leftHeavyFace,
-			locks,
-			repeatingRandom(0, 0.1, 0.9, 0, 0),
-		);
+		const verticalQuarter = randomiseFace(leftHeavyFace, locks, repeatingRandom(0, 0.1, 0.9, 0, 0));
 		const normal = randomiseFace(leftHeavyFace, locks, repeatingRandom(0.6, 0.1, 0.1, 0, 0));
 		const vertical = randomiseFace(leftHeavyFace, locks, repeatingRandom(0.6, 0.1, 0.9, 0, 0));
 
@@ -234,7 +229,7 @@ describe("face model", () => {
 		}
 	});
 
-	it("centres visual density without letting a light outlier dominate", () => {
+	it("centres the complete feature bounding box", () => {
 		const face: typeof DEFAULT_FACE = {
 			...DEFAULT_FACE,
 			parts: {
@@ -247,7 +242,7 @@ describe("face model", () => {
 		const centred = centreFaceParts(face);
 		const placements = Object.values(centred.parts).filter(placement => placement !== null);
 
-		expect(centred.parts.eye1?.x).toBe(1.5);
+		expect(centred.parts.eye1?.x).toBe(0);
 		expect(centred.parts.eye2?.x).toBe(9);
 		expect(centreFaceParts(centred)).toEqual(centred);
 		placements.forEach(placement => {
@@ -262,18 +257,26 @@ describe("face model", () => {
 		});
 	});
 
-	it("centres optical density vertically after randomisation", () => {
+	it("centres feature bounds on both axes after randomisation", () => {
 		const random = pseudoRandom(84);
 		let maximumXError = 0;
 		let maximumYError = 0;
 
 		for (let index = 0; index < 100; index += 1) {
 			const face = randomiseFace(DEFAULT_FACE, DEFAULT_FACE_PART_LOCKS, random);
-			const opticalCentre = getFaceOpticalCentre(face);
 			const placements = Object.values(face.parts).filter(placement => placement !== null);
+			const left = Math.min(...placements.map(placement => placement.x));
+			const top = Math.min(...placements.map(placement => placement.y));
+			const right = Math.max(
+				...placements.map(placement => placement.x + getPartDefinition(placement.name).width),
+			);
+			const bottom = Math.max(
+				...placements.map(placement => placement.y + getPartDefinition(placement.name).height),
+			);
+			const boundsCentre = { x: (left + right) / 2, y: (top + bottom) / 2 };
 
-			maximumXError = Math.max(maximumXError, Math.abs(opticalCentre.x - GRID_DIVISIONS / 2));
-			maximumYError = Math.max(maximumYError, Math.abs(opticalCentre.y - GRID_DIVISIONS / 2));
+			maximumXError = Math.max(maximumXError, Math.abs(boundsCentre.x - GRID_DIVISIONS / 2));
+			maximumYError = Math.max(maximumYError, Math.abs(boundsCentre.y - GRID_DIVISIONS / 2));
 
 			placements.forEach((placement, placementIndex) => {
 				placements.slice(placementIndex + 1).forEach(otherPlacement => {
@@ -282,7 +285,7 @@ describe("face model", () => {
 			});
 		}
 
-		expect(maximumXError).toBeLessThanOrEqual(0.5);
-		expect(maximumYError).toBeLessThanOrEqual(0.5);
+		expect(maximumXError).toBeLessThanOrEqual(0.25);
+		expect(maximumYError).toBeLessThanOrEqual(0.25);
 	});
 });

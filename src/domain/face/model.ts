@@ -1,6 +1,5 @@
 import {
 	eyeParts,
-	facePartOpticalMass,
 	getPartDefinition,
 	mouthParts,
 	noseParts,
@@ -426,7 +425,7 @@ export const randomiseFace = (
 	const canvasCentre = GRID_DIVISIONS / 2;
 	let bestFace: FaceState | null = null;
 	let bestCollisionScore = Number.POSITIVE_INFINITY;
-	let bestOpticalDistance = Number.POSITIVE_INFINITY;
+	let bestCentreDistance = Number.POSITIVE_INFINITY;
 
 	for (let attempt = 0; attempt < 8; attempt += 1) {
 		const candidate = centreFacePartsWithLocks(
@@ -439,20 +438,20 @@ export const randomiseFace = (
 		);
 		const placements = compactPlacements(...Object.values(candidate.parts));
 		const collisionScore = getTotalCollisionScore(placements);
-		const opticalCentre = getOpticalCentre(placements);
-		const opticalDistance =
-			(opticalCentre.x - canvasCentre) ** 2 + (opticalCentre.y - canvasCentre) ** 2;
+		const boundsCentre = getBoundsCentre(placements);
+		const centreDistance =
+			(boundsCentre.x - canvasCentre) ** 2 + (boundsCentre.y - canvasCentre) ** 2;
 
 		if (
 			collisionScore < bestCollisionScore ||
-			(collisionScore === bestCollisionScore && opticalDistance < bestOpticalDistance)
+			(collisionScore === bestCollisionScore && centreDistance < bestCentreDistance)
 		) {
 			bestFace = candidate;
 			bestCollisionScore = collisionScore;
-			bestOpticalDistance = opticalDistance;
+			bestCentreDistance = centreDistance;
 		}
 
-		if (collisionScore === 0 && opticalDistance <= 0.125) break;
+		if (collisionScore === 0 && centreDistance <= 0.125) break;
 	}
 
 	return bestFace ?? face;
@@ -562,29 +561,28 @@ const CENTERING_OFFSETS = Array.from(
 	(_, index) => index * POSITION_STEP - GRID_DIVISIONS,
 );
 
-const getOpticalCentre = (placements: readonly PartPlacement[]) => {
-	let totalArea = 0;
-	let xMoment = 0;
-	let yMoment = 0;
+const getPartBounds = (placements: readonly PartPlacement[]): Bounds => {
+	const left = Math.min(...placements.map(placement => placement.x));
+	const top = Math.min(...placements.map(placement => placement.y));
+	const right = Math.max(
+		...placements.map(placement => placement.x + getPartDefinition(placement.name).width),
+	);
+	const bottom = Math.max(
+		...placements.map(placement => placement.y + getPartDefinition(placement.name).height),
+	);
 
-	placements.forEach(placement => {
-		const definition = getPartDefinition(placement.name);
-		const opticalMass = facePartOpticalMass[placement.name];
-		const localX = placement.flipX ? definition.width - opticalMass.x : opticalMass.x;
-		const localY = placement.flipY ? definition.height - opticalMass.y : opticalMass.y;
-
-		totalArea += opticalMass.area;
-		xMoment += (placement.x + localX) * opticalMass.area;
-		yMoment += (placement.y + localY) * opticalMass.area;
-	});
-
-	return totalArea
-		? { x: xMoment / totalArea, y: yMoment / totalArea }
-		: { x: GRID_DIVISIONS / 2, y: GRID_DIVISIONS / 2 };
+	return { x: left, y: top, width: right - left, height: bottom - top };
 };
 
-export const getFaceOpticalCentre = (face: FaceState) =>
-	getOpticalCentre(compactPlacements(...Object.values(face.parts)));
+const getBoundsCentre = (placements: readonly PartPlacement[]) => {
+	if (placements.length === 0) {
+		return { x: GRID_DIVISIONS / 2, y: GRID_DIVISIONS / 2 };
+	}
+
+	const bounds = getPartBounds(placements);
+
+	return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+};
 
 const getTotalCollisionScore = (placements: readonly PartPlacement[]) =>
 	placements.reduce(
@@ -630,11 +628,10 @@ const offsetFaceParts = (
 
 		if (!placement || locks[key]) return;
 
-		const definition = getPartDefinition(placement.name);
 		const movedPlacement = {
 			...placement,
-			x: snap(clamp(placement.x + offsetX, 0, GRID_DIVISIONS - definition.width)),
-			y: snap(clamp(placement.y + offsetY, 0, GRID_DIVISIONS - definition.height)),
+			x: snap(placement.x + offsetX),
+			y: snap(placement.y + offsetY),
 		};
 
 		nextParts[key] = orientDirectionAwareParts
@@ -661,17 +658,33 @@ const centreFacePartsWithLocks = (
 	const canvasCentre = GRID_DIVISIONS / 2;
 	const stationaryParts = offsetFaceParts(face.parts, locks, 0, 0, orientDirectionAwareParts);
 	const stationaryPlacements = compactPlacements(...Object.values(stationaryParts));
+	const movablePlacements: PartPlacement[] = [];
+
+	(Object.keys(stationaryParts) as FacePartKey[]).forEach(key => {
+		const placement = stationaryParts[key];
+
+		if (placement && !locks[key]) movablePlacements.push(placement);
+	});
+
+	const movableBounds = getPartBounds(movablePlacements);
+	const minimumOffsetX = -movableBounds.x;
+	const maximumOffsetX = GRID_DIVISIONS - movableBounds.x - movableBounds.width;
+	const minimumOffsetY = -movableBounds.y;
+	const maximumOffsetY = GRID_DIVISIONS - movableBounds.y - movableBounds.height;
 	const maximumCollisionScore = getTotalCollisionScore(stationaryPlacements);
-	const stationaryOpticalCentre = getOpticalCentre(stationaryPlacements);
+	const stationaryBoundsCentre = getBoundsCentre(stationaryPlacements);
 	let bestParts = stationaryParts;
 	let bestCollisionScore = maximumCollisionScore;
-	let bestOpticalDistance =
-		(stationaryOpticalCentre.x - canvasCentre) ** 2 +
-		(stationaryOpticalCentre.y - canvasCentre) ** 2;
+	let bestCentreDistance =
+		(stationaryBoundsCentre.x - canvasCentre) ** 2 + (stationaryBoundsCentre.y - canvasCentre) ** 2;
 	let bestMovement = 0;
 
 	CENTERING_OFFSETS.forEach(offsetX => {
+		if (offsetX < minimumOffsetX || offsetX > maximumOffsetX) return;
+
 		CENTERING_OFFSETS.forEach(offsetY => {
+			if (offsetY < minimumOffsetY || offsetY > maximumOffsetY) return;
+
 			const candidateParts = offsetFaceParts(
 				face.parts,
 				locks,
@@ -681,26 +694,26 @@ const centreFacePartsWithLocks = (
 			);
 			const placements = compactPlacements(...Object.values(candidateParts));
 			const collisionScore = getTotalCollisionScore(placements);
-			const opticalCentre = getOpticalCentre(placements);
-			const opticalDistance =
-				(opticalCentre.x - canvasCentre) ** 2 + (opticalCentre.y - canvasCentre) ** 2;
+			const boundsCentre = getBoundsCentre(placements);
+			const centreDistance =
+				(boundsCentre.x - canvasCentre) ** 2 + (boundsCentre.y - canvasCentre) ** 2;
 			const movement = Math.abs(offsetX) + Math.abs(offsetY);
 
 			if (collisionScore > maximumCollisionScore) return;
 
-			const isOpticallyCloser = opticalDistance < bestOpticalDistance;
-			const isEquallyClose = opticalDistance === bestOpticalDistance;
+			const isCloser = centreDistance < bestCentreDistance;
+			const isEquallyClose = centreDistance === bestCentreDistance;
 			const hasLessCollision = collisionScore < bestCollisionScore;
 			const hasEqualCollision = collisionScore === bestCollisionScore;
 
 			if (
-				isOpticallyCloser ||
+				isCloser ||
 				(isEquallyClose && hasLessCollision) ||
 				(isEquallyClose && hasEqualCollision && movement < bestMovement)
 			) {
 				bestParts = candidateParts;
 				bestCollisionScore = collisionScore;
-				bestOpticalDistance = opticalDistance;
+				bestCentreDistance = centreDistance;
 				bestMovement = movement;
 			}
 		});

@@ -616,47 +616,6 @@ export type NosePartName = (typeof noseParts)[number]["name"];
 export type MouthPartName = (typeof mouthParts)[number]["name"];
 export type FacePartName = EyePartName | NosePartName | MouthPartName;
 
-type OpticalMass = {
-	x: number;
-	y: number;
-	area: number;
-};
-
-// Filled SVG paths sampled in each part's local grid coordinates.
-export const facePartOpticalMass = {
-	Eye01: { x: 1, y: 1, area: 3.14 },
-	Eye02: { x: 2, y: 1.01, area: 4.714 },
-	Eye03: { x: 1.5, y: 2.53, area: 9.275 },
-	Eye04: { x: 2.154, y: 2.437, area: 9.931 },
-	Eye05: { x: 2, y: 2, area: 9.428 },
-	Eye06: { x: 2.003, y: 2.003, area: 7.553 },
-	Nose01: { x: 3.5, y: 3, area: 12 },
-	Nose02: { x: 2.5, y: 4, area: 10 },
-	Nose03: { x: 2, y: 0.99, area: 4.714 },
-	Nose04: { x: 1.553, y: 2.397, area: 6.714 },
-	Nose05: { x: 2.5, y: 2.071, area: 7 },
-	Nose06: { x: 2.798, y: 2.199, area: 7.019 },
-	Nose07: { x: 1, y: 1, area: 3.14 },
-	Nose08: { x: 1.1, y: 4.4, area: 10 },
-	Nose09: { x: 2, y: 2, area: 9.428 },
-	Nose10: { x: 4, y: 2.152, area: 16.363 },
-	Nose11: { x: 2.174, y: 3.588, area: 15.913 },
-	Nose12: { x: 1.5, y: 1.9, area: 5 },
-	NoseEye01: { x: 3.5, y: 3, area: 11.428 },
-	NoseEye02: { x: 3.591, y: 2.819, area: 11.714 },
-	NoseEye03: { x: 3.916, y: 3.104, area: 14.428 },
-	NoseEye04: { x: 3.409, y: 3.181, area: 11.714 },
-	NoseEye05: { x: 2.174, y: 3.412, area: 15.913 },
-	NoseEye06: { x: 3.5, y: 3.5, area: 12.428 },
-	Mouth01: { x: 2.876, y: 2.876, area: 7.067 },
-	Mouth02: { x: 3.502, y: 1.651, area: 6.946 },
-	Mouth03: { x: 5, y: 2.876, area: 14.135 },
-	Mouth04: { x: 1, y: 1, area: 3.14 },
-	Mouth05: { x: 2.5, y: 2.5, area: 5.041 },
-	Mouth06: { x: 2.5, y: 0.5, area: 5 },
-	Mouth07: { x: 2, y: 0.99, area: 4.714 },
-} as const satisfies Record<FacePartName, OpticalMass>;
-
 const partLookup = new Map<FacePartName, FacePartDefinition<FacePartName>>(
 	[...eyeParts, ...noseParts, ...mouthParts].map(part => [part.name, part]),
 );
