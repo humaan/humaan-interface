@@ -95,6 +95,11 @@ const getDefinitionBounds = (
 	height: definition.boundH ?? fallback.height,
 });
 
+export const getFacePartPlacementBounds = (
+	key: FacePartKey,
+	definition: FacePartDefinition<FacePartName>,
+) => getDefinitionBounds(definition, defaultPartBounds[key]);
+
 export const normaliseBounds = (bounds: Bounds): Bounds => {
 	const x = clamp(bounds.x, 0, GRID_DIVISIONS);
 	const y = clamp(bounds.y, 0, GRID_DIVISIONS);
@@ -125,7 +130,12 @@ const placeWithinBounds = (
 	};
 };
 
-const getCollisionZones = (placement: PartPlacement): Bounds[] => {
+export const getFacePartFallbackPosition = (
+	key: FacePartKey,
+	definition: FacePartDefinition<FacePartName>,
+) => placeWithinBounds(definition, getFacePartPlacementBounds(key, definition), null);
+
+export const getFacePartCollisionZones = (placement: PartPlacement): Bounds[] => {
 	const definition = getPartDefinition(placement.name);
 	const padding = definition.collisionZones ? POSITION_STEP / 2 : 0;
 	const zones = definition.collisionZones ?? [
@@ -151,13 +161,13 @@ const getIntersectionArea = (first: Bounds, second: Bounds) => {
 };
 
 const getCollisionScore = (placement: PartPlacement, obstacles: readonly PartPlacement[]) =>
-	getCollisionZones(placement).reduce(
+	getFacePartCollisionZones(placement).reduce(
 		(total, zone) =>
 			total +
 			obstacles.reduce(
 				(obstacleTotal, obstacle) =>
 					obstacleTotal +
-					getCollisionZones(obstacle).reduce(
+					getFacePartCollisionZones(obstacle).reduce(
 						(zoneTotal, obstacleZone) => zoneTotal + getIntersectionArea(zone, obstacleZone),
 						0,
 					),
@@ -315,7 +325,7 @@ const randomPlacement = (
 	return bestPlacement;
 };
 
-const getPartSlots = (placement: PartPlacement): Bounds[] => {
+export const getFacePartSlots = (placement: PartPlacement): Bounds[] => {
 	const definition = getPartDefinition(placement.name);
 
 	return (definition.slots ?? [])
@@ -342,7 +352,7 @@ const createRandomParts = (
 		? currentParts.mouth
 		: randomPlacement(
 				mouthParts,
-				definition => getDefinitionBounds(definition, defaultPartBounds.mouth),
+				definition => getFacePartPlacementBounds("mouth", definition),
 				random,
 				true,
 				compactPlacements(
@@ -362,7 +372,7 @@ const createRandomParts = (
 	} else {
 		nose = randomPlacement(
 			noseParts,
-			definition => getDefinitionBounds(definition, defaultPartBounds.nose),
+			definition => getFacePartPlacementBounds("nose", definition),
 			random,
 			false,
 			compactPlacements(
@@ -373,7 +383,7 @@ const createRandomParts = (
 		);
 	}
 
-	const eyeSlots = nose ? getPartSlots(nose) : mouth ? getPartSlots(mouth) : [];
+	const eyeSlots = nose ? getFacePartSlots(nose) : mouth ? getFacePartSlots(mouth) : [];
 	const useDefaultEyeBounds = eyeSlots.length === 0;
 	const eye1Bounds = eyeSlots[0] ?? (useDefaultEyeBounds ? defaultPartBounds.eye1 : null);
 	const eye2Bounds = eyeSlots[1] ?? (useDefaultEyeBounds ? defaultPartBounds.eye2 : null);
@@ -474,7 +484,6 @@ export const selectFacePart = (
 	}
 
 	const currentPlacement = face.parts[key];
-	const bounds = getDefinitionBounds(definition, defaultPartBounds[key]);
 	const position = currentPlacement
 		? {
 				x: snap(
@@ -494,7 +503,7 @@ export const selectFacePart = (
 					),
 				),
 			}
-		: placeWithinBounds(definition, bounds, null);
+		: getFacePartFallbackPosition(key, definition);
 
 	return {
 		...face,
