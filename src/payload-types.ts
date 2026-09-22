@@ -153,6 +153,8 @@ export interface Asset {
   id: string;
   path: string;
   imagekit?: ImagekitFields;
+  prefix?: string | null;
+  _objectKey?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -193,6 +195,7 @@ export interface User {
   resetPasswordExpiration?: string | null;
   salt?: string | null;
   hash?: string | null;
+  resetPasswordRequestedAt?: string | null;
   loginAttempts?: number | null;
   lockUntil?: string | null;
   sessions?:
@@ -303,6 +306,8 @@ export interface PeopleSelect<T extends boolean = true> {
 export interface AssetsSelect<T extends boolean = true> {
   path?: T;
   imagekit?: T | ImagekitFieldsSelect<T>;
+  prefix?: T;
+  _objectKey?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
@@ -336,6 +341,7 @@ export interface UsersSelect<T extends boolean = true> {
   resetPasswordExpiration?: T;
   salt?: T;
   hash?: T;
+  resetPasswordRequestedAt?: T;
   loginAttempts?: T;
   lockUntil?: T;
   sessions?:
